@@ -1,0 +1,52 @@
+{
+  "type": "Lng",
+  "version": 3,
+  "endianness": "BE",
+  "entries": [
+    {
+      "lang_id": "dynamite_donate",
+      "color": 5,
+      "value": "Grazie per usare dynamite! Se hai apprezzato la tua esperienza in co-op, ti invitiamo a considerare una donazione.\n\nPuoi trovare i link per le donazioni (e disattivare questo popup) nell'interfaccia dell'installer.\n\n(Puoi continuare a giocare in co-op esattamente come prima, questo messaggio è una gentile richiesta)."
+    },
+    {
+      "lang_id": "dynamite_connection_established",
+      "color": 5,
+      "value": "Connessione co-op stabilita"
+    },
+    {
+      "lang_id": "dynamite_created_host_session",
+      "color": 5,
+      "value": "Sessione host creata"
+    },
+    {
+      "lang_id": "dynamite_created_client_session",
+      "color": 5,
+      "value": "Sessione client creata"
+    },
+    {
+      "lang_id": "dynamite_session_status_reset",
+      "color": 5,
+      "value": "Stato della sessione reimpostato"
+    },
+    {
+      "lang_id": "dynamite_host_connect_attempt",
+      "color": 5,
+      "value": "Tentativo di connessione client come host, non dovresti farlo!"
+    },
+    {
+      "lang_id": "dynamite_establishing_connection",
+      "color": 5,
+      "value": "Stabilendo la connessione co-op..."
+    },
+    {
+      "lang_id": "dynamite_connection_failed",
+      "color": 5,
+      "value": "Impossibile creare la sessione co-op, riprova"
+    },
+    {
+      "lang_id": "dynamite_warp_no_player",
+      "color": 5,
+      "value": "Nessun giocatore a cui teletrasportarsi"
+    }
+  ]
+}

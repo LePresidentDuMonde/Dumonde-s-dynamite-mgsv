@@ -1,0 +1,97 @@
+{{ template "header" . }}
+
+<style>
+    #status { padding: 12px; border-left: 6px solid #888; margin-bottom: 12px; }
+    #status.ok { border-color: #3c3; } #status.info { border-color: #39f; }
+    #status.warn { border-color: #fa0; } #status.error { border-color: #f44; }
+    #status b { font-size: 1.2em; }
+    #log { height: 60vh; overflow-y: auto; background: #111; color: #ccc; font: 12px monospace; padding: 8px; white-space: pre-wrap; }
+    #log .error { color: #f66; } #log .warn { color: #fc6; } #log .conn { color: #6f6; }
+</style>
+
+<div class="container">
+    <h1>Live session</h1>
+    <div id="status"><b id="status-text">Loading...</b><div id="status-hint"></div><small id="status-meta"></small></div>
+    <p>
+        <button type="button" onclick="copyLog()">Copy log</button>
+        <label><input type="checkbox" id="follow" checked> Auto-scroll</label>
+        <span id="copied"></span>
+    </p>
+    <div id="log"></div>
+</div>
+
+<script>
+    const logEl = document.getElementById('log');
+    const connWords = ['Connection', 'connection_', 'session', 'disconnect'];
+    let lastKey = '';
+    let launchPending = new URLSearchParams(location.search).has('launch');
+    history.replaceState(null, '', '/session'); // reload must not launch again
+
+    // waits for install to finish, then starts the game once; overrides shown status meanwhile
+    function launchStep(s) {
+        if (!launchPending || s.installing === undefined) return; // undefined: launcher unreachable
+        if (s.installError) {
+            launchPending = false;
+            Object.assign(s, {level: 'error', status: 'Install failed', hint: s.installError});
+            return;
+        }
+        if (s.installing) {
+            Object.assign(s, {level: 'info', status: 'Installing mod files...', hint: 'The game starts automatically when done.'});
+            return;
+        }
+        launchPending = false;
+        location.href = 'steam://run/287700';
+        Object.assign(s, {level: 'info', status: 'Starting the game...', hint: 'Steam may ask for confirmation.'});
+    }
+
+    function cls(line) {
+        if (line.includes('[error]')) return 'error';
+        if (line.includes('[warning]')) return 'warn';
+        return connWords.some(w => line.includes(w)) ? 'conn' : '';
+    }
+
+    function render(s) {
+        launchStep(s);
+        const st = document.getElementById('status');
+        st.className = s.level;
+        document.getElementById('status-text').textContent = s.status;
+        document.getElementById('status-hint').textContent = s.hint;
+        const age = s.age < 0 ? 'no log yet' : `last log update ${s.age}s ago`;
+        document.getElementById('status-meta').textContent =
+            `Role: ${s.role} | ${age} | network debugging: ${s.verbose ? 'on' : 'off'}`;
+
+        if (!s.lines) return;
+        const lines = s.lines;
+        const key = lines.length + lines[lines.length - 1];
+        if (key === lastKey) return;
+        lastKey = key;
+        logEl.replaceChildren(...lines.map(l => {
+            const d = document.createElement('div');
+            d.textContent = l;
+            d.className = cls(l);
+            return d;
+        }));
+        if (document.getElementById('follow').checked) logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function poll() {
+        try {
+            const r = await fetch('/api/session');
+            render(await r.json());
+        } catch (e) {
+            render({level: 'error', status: 'Launcher not reachable', hint: 'Is dynamite still running?', age: -1, role: 'unknown'});
+        }
+        setTimeout(poll, 1000);
+    }
+
+    function copyLog() {
+        navigator.clipboard.writeText(logEl.innerText).then(() => {
+            document.getElementById('copied').textContent = 'Copied!';
+            setTimeout(() => document.getElementById('copied').textContent = '', 2000);
+        });
+    }
+
+    poll();
+</script>
+
+{{ template "footer" . }}

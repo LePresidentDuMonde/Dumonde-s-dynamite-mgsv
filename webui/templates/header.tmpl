@@ -1,0 +1,25 @@
+{{ define "header" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dynamite Web UI</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    {{ .MetaTag | rawHTML }}
+</head>
+
+<body>
+    <h1>dynamite, MGSV:TPP co-op mod, {{ .Version.Tag }}</h1>
+    <header>
+      <nav>
+        <a href="/" style="font-weight: 600;" class="no-visited">Configuration</a>
+        <a href="/session" style="font-weight: 600;" class="no-visited">Live session</a>
+        <a href="/docs" style="font-weight: 600;" class="no-visited">Documentation</a>
+        <a href="/missionlist" style="font-weight: 600;" class="no-visited">Mission list</a>
+        <a href="/donate" style="font-weight: 600;" class="no-visited">Donate</a>
+        {{ if .HasUpdate }}<a href="https://github.com/unknown321/dynamite/releases/latest" class="color-changing-text" target="_blank">Update available</a>{{ end }}
+      </nav>
+    </header>
+    <main>
+{{ end }}

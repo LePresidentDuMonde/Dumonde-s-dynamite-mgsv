@@ -1,0 +1,11 @@
+*.swp
+.idea
+dynamite-*
+vendor
+*.fox2
+*.fpk
+*.fpkd
+cache
+moddata/test
+*.lng2
+build.log
