@@ -4,11 +4,77 @@
 #include "lua/lauxlib.h"
 #include "lua/lua.h"
 #include "PartnerHorse.h"
+#include "LocalBuddy.h"
+#include "DogReplica.h"
 #include "memtag.h"
 #include "spdlog/spdlog.h"
 #include <cstring>
 
 namespace Dynamite {
+    int l_SetMissionContext(lua_State *L) {
+        g_hook->dynamiteSyncImpl.SetMissionContext(static_cast<uint32_t>(luaL_checkinteger(L, 1)), lua_toboolean(L, 2) != 0);
+        LocalBuddy::SetEnabled(lua_toboolean(L, 3) != 0);
+        return 0;
+    }
+
+    int l_ProcessIncoming(lua_State *L) {
+        g_hook->dynamiteCore.UpdateNearestEnemy();
+        g_hook->dynamiteSyncImpl.ProcessIncoming();
+        return 0;
+    }
+    int l_SendCoopHello(lua_State *L) { g_hook->dynamiteSyncImpl.SendCoopHello(); return 0; }
+    int l_CoopReady(lua_State *L) { lua_pushboolean(L, g_hook->dynamiteSyncImpl.CoopReady()); return 1; }
+    int l_PartnerInSession(lua_State *L) { lua_pushboolean(L, g_hook->dynamiteSyncImpl.PartnerInSession()); return 1; }
+
+    int l_SendQuestState(lua_State *L) {
+        size_t nameSize, stepSize;
+        const auto name = luaL_checklstring(L, 1, &nameSize);
+        const auto step = luaL_checklstring(L, 2, &stepSize);
+        if (nameSize > 96 || stepSize > 96) return 0;
+        g_hook->dynamiteSyncImpl.SendQuestState({std::string(name, nameSize), std::string(step, stepSize),
+            lua_toboolean(L, 3) != 0, lua_toboolean(L, 4) != 0, static_cast<uint32_t>(luaL_checkinteger(L, 5))});
+        return 0;
+    }
+
+    int l_PopQuestState(lua_State *L) {
+        const auto q = g_hook->dynamiteSyncImpl.PopQuestState();
+        if (!q) return 0;
+        lua_pushstring(L, q->name.c_str());
+        lua_pushstring(L, q->step.c_str());
+        lua_pushboolean(L, q->active);
+        lua_pushboolean(L, q->invoked);
+        lua_pushinteger(L, q->faceID);
+        return 5;
+    }
+
+    int l_UpdatePersonalBuddy(lua_State *L) {
+        const bool active=lua_toboolean(L,1)!=0;
+        LocalBuddy::UpdateOwner(g_hook->cfg.Host,active && g_hook->dynamiteSyncImpl.CoopReady());
+        g_hook->dynamiteSyncImpl.UpdateBuddyScans(active);
+        return 0;
+    }
+    int l_UpdateDogReplicas(lua_State *L) {
+        const bool active=lua_toboolean(L,1)!=0 && g_hook->dynamiteSyncImpl.CoopReady(), selected=lua_toboolean(L,2)!=0;
+        DogReplica::Update(active,selected);
+        if(active) g_hook->dynamiteSyncImpl.SendDogReplica(selected,DogReplica::Generation());
+        lua_pushboolean(L,DogReplica::Available()); return 1;
+    }
+    int l_ResetPersonalBuddyScans(lua_State *) {
+        DogReplica::ResetWorld();
+        g_hook->dynamiteSyncImpl.buddyScans.Reset(true);
+        g_hook->dynamiteSyncImpl.dogReplica.Reset(true); return 0;
+    }
+    int l_GetCoopEpoch(lua_State *L) {
+        const auto &sync=g_hook->dynamiteSyncImpl;
+        const auto value=std::to_string(sync.localEpoch.load())+":"+std::to_string(sync.peerEpoch.load());
+        lua_pushstring(L,value.c_str()); return 1;
+    }
+    int l_GetPlayerCoordinates(lua_State *L) {
+        const int player=luaL_checkinteger(L,1); if(player<0 || player>1) return 0;
+        const auto p=g_hook->dynamiteCore.GetPlayerPosition(player);
+        if(!FinitePosition(p.x,p.y,p.z,0)) return 0;
+        lua_pushnumber(L,p.x); lua_pushnumber(L,p.y); lua_pushnumber(L,p.z); return 3;
+    }
     // TppMain.lua, called automatically on mission start
     int l_CreateHostSession(lua_State *L) {
         spdlog::info(__PRETTY_FUNCTION__);
@@ -54,6 +120,14 @@ namespace Dynamite {
     // called manually
     int l_ResetClientSessionStateWithNotification(lua_State *L) {
         spdlog::info(__PRETTY_FUNCTION__);
+        // A manual retry must end the native session before forgetting it.
+        // Otherwise a later CreateHostSession overlaps its old member callbacks.
+        g_hook->dynamiteCore.StopNearestEnemyThread();
+        if (g_hook->dynamiteCore.GetSessionCreated() || g_hook->dynamiteCore.GetHostSessionCreated() ||
+            g_hook->dynamiteCore.GetSessionConnected()) {
+            g_hook->dynamiteSyncImpl.Stop();
+            CloseSession();
+        }
         l_ResetClientSessionState(L);
 
         lua_getglobal(L, "TppUiCommand");
@@ -504,6 +578,18 @@ namespace Dynamite {
 
     void CreateLibs(lua_State *L) {
         luaL_Reg libFuncs[] = {
+            {"SetMissionContext", l_SetMissionContext},
+            {"ProcessIncoming", l_ProcessIncoming},
+            {"SendCoopHello", l_SendCoopHello},
+            {"CoopReady", l_CoopReady},
+            {"PartnerInSession", l_PartnerInSession},
+            {"SendQuestState", l_SendQuestState},
+            {"PopQuestState", l_PopQuestState},
+            {"UpdatePersonalBuddy",l_UpdatePersonalBuddy},
+            {"ResetPersonalBuddyScans",l_ResetPersonalBuddyScans},
+            {"UpdateDogReplicas",l_UpdateDogReplicas},
+            {"GetCoopEpoch",l_GetCoopEpoch},
+            {"GetPlayerCoordinates",l_GetPlayerCoordinates},
             {"CreateHostSession", l_CreateHostSession},
             {"CreateClientSession", l_CreateClientSession},
             {"ResetClientSessionState", l_ResetClientSessionState},

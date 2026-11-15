@@ -58,6 +58,7 @@ struct HookState {
 };
 
 namespace Dynamite {
+    void Player2GameObjectImplWarpHook(void *self, uint32_t objectID, Vector3 *pos, Quat *rot, bool wait);
     inline Dynamite *g_hook = nullptr;
     inline HookState hookState{};
 

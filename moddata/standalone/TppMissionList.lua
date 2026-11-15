@@ -884,6 +884,7 @@ s[11044] = s[10044]
 s[11052] = s[10052]
 s[11151] = s[10151]
 s[30010] = function(p)
+	TppPackList.AddMissionPack("/Assets/tpp/pack/coop/coop_essentials.fpk")
 	TppPackList.AddLocationCommonScriptPack(p)
 	TppPackList.AddLocationCommonMissionAreaPack(p)
 	TppPackList.AddMissionPack(TppDefine.MISSION_COMMON_PACK.ORDER_BOX)
@@ -894,6 +895,7 @@ s[30010] = function(p)
 	end
 end
 s[30020] = function(p)
+	TppPackList.AddMissionPack("/Assets/tpp/pack/coop/coop_essentials.fpk")
 	TppPackList.AddLocationCommonScriptPack(p)
 	TppPackList.AddLocationCommonMissionAreaPack(p)
 	TppPackList.AddMissionPack(TppDefine.MISSION_COMMON_PACK.ORDER_BOX)

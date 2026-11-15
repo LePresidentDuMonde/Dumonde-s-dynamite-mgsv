@@ -1,0 +1,56 @@
+﻿{
+  "artifact": "dynamite-two-ddogs-experimental-windows-amd64.exe",
+  "bytes": 22466048,
+  "exact_embedded_files": [
+    {
+      "bytes": 3718656,
+      "file": "hook/cmake-build-release-docker-mingw15/dinput8.dll",
+      "offset": 12518432,
+      "sha256": "3853138a01688a7b7e52e29d262c7500d1b2d8423c5b4e1da640862fbffe0248"
+    },
+    {
+      "bytes": 1825,
+      "file": "moddata/standalone/DynamiteBuddy.lua",
+      "offset": 8581664,
+      "sha256": "8c7fcc6088f6782cb5d3d235694d26c3d330131a6b64b18bd6d26c4408600346"
+    },
+    {
+      "bytes": 9154,
+      "file": "moddata/standalone/DynamiteCoop.lua",
+      "offset": 8675968,
+      "sha256": "4bf487e957528c0c455dcaf2ee2265bd4b7f1509a0cc0b7e5d32a926240df05b"
+    },
+    {
+      "bytes": 4304,
+      "file": "moddata/dog_replicas/buddy_dog2_00.fox2",
+      "offset": 8605888,
+      "sha256": "bb77757140d11e808e4ca1f5bb424d1d44552b8228da3b3b9a85ef9050266d4d"
+    },
+    {
+      "bytes": 4304,
+      "file": "moddata/dog_replicas/buddy_dog2_01.fox2",
+      "offset": 8610208,
+      "sha256": "fb311932b50f883dc13d8d4e5ee5de1d45a2d70f5e06d04700e1c712af16e40b"
+    },
+    {
+      "bytes": 4304,
+      "file": "moddata/dog_replicas/buddy_dog2_02.fox2",
+      "offset": 8614528,
+      "sha256": "e00e5e01274a711cfef4b719d3282e668e22e0a3e113bc459aaa4882aaa6f99c"
+    },
+    {
+      "bytes": 4304,
+      "file": "moddata/dog_replicas/buddy_dog2_03.fox2",
+      "offset": 8618848,
+      "sha256": "22eea7f0986cfd2b5176df349ea7e246ea0a7ae585ab7a82a02db2a69fe8de8d"
+    },
+    {
+      "bytes": 4304,
+      "file": "moddata/dog_replicas/buddy_dog2_04.fox2",
+      "offset": 8623168,
+      "sha256": "0928d75d8ba0fa2ac982f34adb57553717d6a39412739f32673d96d974b1ef72"
+    }
+  ],
+  "sha256": "e44e0c363fcbe3fa829d9b2a7f5a504e86b487f65b9cf3b35bda15b673c3af24",
+  "verification_scope": "Byte-identical embedded DLL, Lua and generated Dog scenes. No game runtime test."
+}

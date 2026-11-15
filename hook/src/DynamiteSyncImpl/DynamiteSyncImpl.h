@@ -8,7 +8,13 @@
 #include "Tpp/BossQuietActionTask.h"
 #include "Tpp/BossQuietDamage.h"
 #include "Tpp/TppTypes.h"
+#include "SyncPolicy.h"
+#include "ReceiveDemux.h"
 
+#include "BuddyScanState.h"
+#include "DogReplicaState.h"
+
+#include <atomic>
 #include <chrono>
 #include <deque>
 #include <map>
@@ -16,7 +22,6 @@
 #include <optional>
 #include <thread>
 
-const char DYNAMITE_RAW_HEADER[8] = {68, 89, 78, 65, 77, 73, 84, 69}; // DYNAMITE
 
 namespace Dynamite {
     struct CarryDropInfo {
@@ -35,7 +40,15 @@ namespace Dynamite {
 
     struct VehicleSent {
         std::chrono::steady_clock::time_point time;
-        Vector3 pos;
+        VehicleStateInfo state;
+    };
+
+    struct QuestStateInfo {
+        std::string name;
+        std::string step;
+        bool active;
+        bool invoked;
+        uint32_t faceID = 65536;
     };
 
     class DynamiteSyncImpl {
@@ -57,6 +70,19 @@ namespace Dynamite {
         bool PartnerInSession() const;
         bool SendRaw(const flatbuffers::FlatBufferBuilder *builder) const;
         bool RecvRaw(void *buffer, int32_t size);
+        void ProcessIncoming(); // called only by the Lua update, on the game thread
+        void SetMissionContext(uint32_t mission, bool playing);
+        void SendCoopHello();
+        bool CoopReady() const;
+        void SendQuestState(const QuestStateInfo &state);
+        std::optional<QuestStateInfo> PopQuestState();
+        BuddyScanState buddyScans;
+        void SendBuddyScans();
+        void UpdateBuddyScans(bool active);
+        DogReplicaState dogReplica;
+        void SendDogReplica(bool selected,uint32_t generation);
+        flatbuffers::Offset<DynamiteMessage::MessageWrapper> WrapMessage(flatbuffers::FlatBufferBuilder &builder,
+            uint32_t packet, DynamiteMessage::Message type, flatbuffers::Offset<void> message) const;
 
         void Ping();
 
@@ -72,7 +98,7 @@ namespace Dynamite {
         void RemoveUserMarker(uint32_t markerID);
         static void HandleRemoveUserMarker(const DynamiteMessage::MessageWrapper *w);
 
-        void SetSightMarker(uint32_t objectID, uint32_t duration);
+        void SetSightMarker(uint32_t objectID, float duration);
         static void HandleSetSightMarker(const DynamiteMessage::MessageWrapper *w);
 
         void SendEmblem();
@@ -123,9 +149,19 @@ namespace Dynamite {
         void *steamUDPSocketInfo = nullptr;
         void *steamUDPSocket = nullptr;
 
-        char updateBuffer[1024];
-        uint32_t packetNumber = 0;
-        uint32_t packetSeen = 0;
+        std::atomic<uint32_t> packetNumber = 0;
+        std::mutex incomingMutex;
+        std::deque<std::vector<uint8_t>> incoming;
+        ReplayWindow replay;
+        std::atomic<uint32_t> missionCode = 0;
+        std::atomic<uint64_t> localEpoch = 0;
+        std::atomic<uint64_t> peerEpoch = 0;
+        std::atomic<uint64_t> pendingPeerEpoch = 0;
+        std::recursive_mutex runtimeMutex;
+        std::atomic<bool> missionPlaying = false;
+        std::optional<QuestStateInfo> questState;
+        uint32_t questSequence = 0;
+        std::map<uint32_t, uint32_t> entitySequences;
         std::jthread syncThread;
         std::mutex carryDropsMutex;
         std::deque<CarryDropInfo> carryDrops;
@@ -133,6 +169,7 @@ namespace Dynamite {
         std::map<uint32_t, VehicleStateInfo> vehicleStates;
         std::map<uint32_t, VehicleSent> vehicleSent;
         std::map<std::string, bool> syncStatus{};
+        std::map<std::string, std::vector<bool>> syncReceived;
         std::vector<std::string> enemyVars = {
             // "cpNames",
             // "cpFlags",

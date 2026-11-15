@@ -15,12 +15,23 @@ union Message {
    SendBossQuietSetActionTask,
    SendBossQuietDamage,
    CarryDrop,
-   VehicleState
+   VehicleState,
+   CoopHello,
+   QuestState,
+   BuddyState,
+   BuddyOrder,
+   BuddyAck,
+   BuddyMotion,
+   BuddyScans,
+   DogReplicaPose
 }
 
 table MessageWrapper {
   packet_num: uint32;
   msg: Message;
+  mission_code: uint32;
+  sender_epoch: uint64;
+  receiver_epoch: uint64;
 }
 
 root_type MessageWrapper;
@@ -50,7 +61,26 @@ table RemoveUserMarker {
 
 table SetSightMarker {
     object_id: uint32;
-    duration: uint32;
+    duration: float32;
+}
+
+// Full, bounded active detection set. Empty vector removes remote scans only.
+table BuddyScans { object_ids:[ushort] (required); }
+
+// Complete skeletal frames are split into small, bounded UDP packets. A remote actor
+// only displays a fully assembled frame; partial poses never reach native matrices.
+table DogReplicaPose {
+    generation:uint;
+    frame:uint;
+    owner:ubyte;
+    active:bool;
+    space:ubyte;
+    bone_count:ushort;
+    first_bone:ushort;
+    world:[float] (required);
+    matrices:[float] (required);
+    position:Vec3;
+    rotation:BuddyRotation;
 }
 
 table RequestVar {
@@ -173,4 +203,57 @@ table VehicleState {
     rot_y: float32;
     has_rot: bool;
     driven: bool;
+}
+
+// Challenge/echo handshake: epochs change on every mission allocation, including restarts.
+table CoopHello {
+    protocol: uint32;
+    host: bool;
+    echo_epoch: uint64;
+}
+
+// One shared Side Op. A periodic snapshot survives packet loss; it does not grant guest rewards.
+table QuestState {
+    name: string (required);
+    step: string (required);
+    active: bool;
+    invoked: bool;
+    face_id: uint32 = 65536;
+}
+
+// One stock buddy pool per team. Revision changes whenever its loadout changes.
+struct BuddyRotation { x:float; y:float; z:float; w:float; }
+table BuddyState {
+    revision:uint;
+    buddy_type:ubyte;
+    horse_equip:ubyte;
+    dog_equip:ubyte;
+    dog_skin:ubyte;
+    ready:bool;
+    pos:Vec3;
+    rotation:BuddyRotation;
+    rider:byte = -1;
+    horse_color:ubyte;
+    horse_head:ubyte;
+    horse_foot:ubyte;
+    dog_eye:ubyte;
+}
+// The native message is rebuilt locally from these values; no native memory crosses the wire.
+table BuddyOrder {
+    revision:uint;
+    serial:uint;
+    buddy_type:ubyte;
+    command:ulong;
+    player:ubyte;
+    target:ushort = 65535;
+    option:ubyte;
+    pos:Vec3;
+}
+table BuddyAck { revision:uint; serial:uint; accepted:bool; }
+// Only the guest riding the shared horse may propose a motion update to the host.
+table BuddyMotion {
+    revision:uint;
+    mounted:bool;
+    pos:Vec3;
+    rotation:BuddyRotation;
 }

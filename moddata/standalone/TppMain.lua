@@ -97,6 +97,9 @@ function e.DisableBlackLoading()
 end
 
 function e.IsCoop(missionCode)
+	if missionCode == 30010 or missionCode == 30020 then
+		return Dynamite ~= nil and type(Dynamite.SetMissionContext) == "function"
+	end
 	local coops = {
 		10020, -- 1
 		10036, -- 3
@@ -146,6 +149,15 @@ function e.IsCoop(missionCode)
 end
 
 function e.OnAllocate(n)
+	Dynamite.StopNearestEnemyThread()
+	-- Every entry in n is treated as a script module by the engine loader.
+	-- Keep lifecycle metadata outside that table, including for the title screen.
+	mvars.dyn_missionScene = {
+		mission = n,
+		dynamiteCoopScene = e.IsCoop(vars.missionCode),
+		dynamiteSessionClosed = false,
+	}
+	DynamiteCoop.BeginMission()
 	-- If you are loading a mission from a checkpoint with already placed marker, game will attempt to restore
 	-- that marker through tpp::ui::menu::UiDepend::ActUserMarkerSaveLoad function (not lua).
 	-- Combined with co-op hacks, marker restoration will result in a hang.
@@ -169,7 +181,7 @@ function e.OnAllocate(n)
 		TppMission.SetFOBMissionFlag() -- crashes 10033
 		TppGameStatus.Set("Mission", "S_IS_ONLINE")
 	elseif e.IsCoop(vars.missionCode) then
-		TppNetworkUtil.SetTimeOut(10);
+		TppNetworkUtil.SetTimeOut((vars.missionCode == 30010 or vars.missionCode == 30020) and 30 or 10)
 		if Dynamite.IsHost() then
 			Dynamite.CreateHostSession()
 		else
@@ -640,6 +652,9 @@ function e.OnMissionCanStart()
 	end
 end
 function e.OnMissionGameStart(n)
+	if vars.missionCode == 30010 or vars.missionCode == 30020 then
+		if e.IsCoop(vars.missionCode) then TppCoder.SetWorldCenter(Vector3(0, 0, 0)) end
+	end
 	mvars.dyn_gameStarted = true -- dynamite: commands sent while loading can freeze the game
 	TppClock.Start()
 	if not gvars.ini_isTitleMode then
@@ -659,6 +674,7 @@ function e.OnMissionGameStart(n)
 		TppMission.EnableAlertOutOfMissionAreaIfAlertAreaStart()
 	end
 	TppSoundDaemon.ResetMute("Telop")
+	DynamiteCoop.StartMission()
 end
 function e.ClearStageBlockMessage()
 	StageBlock.ClearLargeBlockNameForMessage()
@@ -856,6 +872,7 @@ function e.OnReload(n)
 	e.SetMessageFunction(n)
 end
 function e.OnUpdate(e)
+	DynamiteCoop.Update()
 	TppEnemy.DynamiteOnUpdate()
 	local e
 	local i = a
@@ -932,19 +949,30 @@ function e.OnMessage(n, e, i, a, p, t, o)
 		n.animalBlockScript.OnMessage(e, i, a, p, t, o, s)
 	end
 end
-function e.OnTerminate(e)
-	if e.sequence then
-		if t(e.sequence.OnTerminate) then
-			e.sequence.OnTerminate()
-		end
-	end
-
-	if TppGameStatus.IsSet("Mission", "S_IS_ONLINE") and e.IsCoop(vars.missionCode) then
-		Dynamite.StopNearestEnemyThread()
+-- Reload preparation can unload objects before OnTerminate is called.
+function e.DynamiteStopCoopSession(mission)
+	mission = mission or mvars.dyn_missionScene
+	if not mission or not mission.dynamiteCoopScene or mission.dynamiteSessionClosed then return end
+	mission.dynamiteSessionClosed = true
+	Dynamite.IgnoreMarkerRequests()
+	Dynamite.StopNearestEnemyThread()
+	DynamiteCoop.EndMission()
+	if TppGameStatus.IsSet("Mission", "S_IS_ONLINE") then
+		if Dynamite.IsHost() then TppNetworkUtil.SessionEnableAccept(false) end
 		TppGameStatus.Reset("Mission", "S_IS_ONLINE")
 		TppNetworkUtil.SessionDisconnectPreparingMembers()
 		TppNetworkUtil.CloseSession()
 		Dynamite.ResetClientSessionState()
+	end
+end
+function e.OnTerminate(mission)
+	local scene = mvars.dyn_missionScene
+	if scene and scene.mission == mission then e.DynamiteStopCoopSession(scene) end
+	DynamiteCoop.EndMission()
+	if mission.sequence then
+		if t(mission.sequence.OnTerminate) then
+			mission.sequence.OnTerminate()
+		end
 	end
 end
 return e

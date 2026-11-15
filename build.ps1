@@ -1,11 +1,11 @@
-# Native Windows build: hook dll + launcher exe. Tools are downloaded into %LOCALAPPDATA%\dynamite-build-tools
+# Native Windows build: hook DLL + launcher. Portable tools stay in the repository.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = 'Tls12'
 
 $root = $PSScriptRoot
 # GCC breaks when installed in a path with spaces, so tools live outside the project
-$tools = Join-Path $env:LOCALAPPDATA 'dynamite-build-tools'
+$tools = Join-Path $root '.build-tools'
 $log = Join-Path $root 'build.log'
 $hookBuild = Join-Path $root 'hook\cmake-build-release-docker-mingw15'
 $goUrl = 'https://go.dev/dl/go1.24.5.windows-amd64.zip'
@@ -46,18 +46,13 @@ function Get-Zip($name, $url) {
 
 try {
     Step 1 'Checking required programs'
-    foreach ($p in 'cmake', 'git') {
+    foreach ($p in 'git') {
         if (-not (Get-Command $p -ErrorAction SilentlyContinue)) { throw "$p is not installed or not in PATH" }
         Say "$p found"
     }
     if ($tools -match ' ') { throw "Tools path contains a space, GCC cannot work there: $tools" }
 
-    # reuse tools downloaded by the previous version of this script
-    $oldTools = Join-Path $root 'tools'
-    if ((Test-Path $oldTools) -and -not (Test-Path $tools)) {
-        Say "Moving downloaded tools to $tools"
-        Move-Item $oldTools $tools
-    }
+    $cmakeDir = Get-Zip 'cmake' 'https://github.com/Kitware/CMake/releases/download/v4.1.1/cmake-4.1.1-windows-x86_64.zip'
 
     Step 2 'Getting compiler (GCC) and Go'
     $gccDir = Join-Path $tools 'gcc'
@@ -71,7 +66,7 @@ try {
     }
     $goDir = Get-Zip 'go' $goUrl
 
-    $env:PATH = "$gccDir\mingw64\bin;$goDir\go\bin;$env:PATH"
+    $env:PATH = "$cmakeDir\cmake-4.1.1-windows-x86_64\bin;$gccDir\mingw64\bin;$goDir\go\bin;$env:PATH"
     $env:CMAKE_POLICY_VERSION_MINIMUM = '3.5' # bundled CMake 4 rejects old dependency projects otherwise
     $env:GOPATH = Join-Path $tools 'gopath'
     $env:GOCACHE = Join-Path $tools 'gocache'

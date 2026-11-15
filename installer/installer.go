@@ -312,6 +312,8 @@ func createEssentials(outdir string) error {
 
 func replaceFiles(outdir string) error {
 	for _, f := range moddata.ReplaceInFPK {
+		// slices.Delete clears its backing array. Preserve the manifest for subsequent reinstalls.
+		f.Delete = slices.Clone(f.Delete)
 		sourceFpkData, err := f.Source.Unpack(qars)
 		if err != nil {
 			return err

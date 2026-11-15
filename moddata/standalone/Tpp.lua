@@ -82,6 +82,8 @@ e.requires = {
 	"/Assets/tpp/script/lib/TppTrophy.lua",
 	"/Assets/tpp/script/lib/TppMbFreeDemo.lua",
 	"/Assets/tpp/script/lib/script_loader.lua",
+	"/Assets/tpp/script/lib/DynamiteCoop.lua",
+	"/Assets/tpp/script/lib/DynamiteBuddy.lua",
 }
 function e.IsTypeFunc(e)
 	return t(e) == "function"

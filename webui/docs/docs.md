@@ -156,6 +156,14 @@ and launch the executable. This mod is **not** available on Nexus Mods or Discor
 
 ### Playing
 
+Exploration in Afghanistan and Africa now includes experimental shared Side Ops. Stay in the same area and start the
+Side Op together: the host chooses the quest and receives its progression and rewards. Both players must install the
+same build. Automatic D-Dog detections are shared in both directions. The experimental protocol 4 build adds a second
+Dog model on each PC, driven by the partner's model and skeletal poses. Start testing with matching D-Dog equipment
+and appearance. The second actor's rendering, AI isolation and collisions still require validation in two real games.
+Mixed companion types and separate remote equipment resources are not supported by this replica implementation.
+See `docs/TWO_DDOGS_FR.md` and `docs/SIDEOPS_BUDDIES_FR.md` in the source repository for validation and limits.
+
 **Note**: dynamite uses its own save files, which are a copy of yours. However, online resources and funds are **not**
 transferred to local master server; stub data is used instead.
 

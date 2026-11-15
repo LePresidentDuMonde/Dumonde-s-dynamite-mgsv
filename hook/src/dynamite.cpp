@@ -1,4 +1,7 @@
 #include "PartnerHorse.h"
+#include "LocalBuddy.h"
+#include "BuddyScans.h"
+#include "DogReplica.h"
 #include "dynamite.h"
 #include "windows.h"
 #include <atomic>
@@ -116,7 +119,7 @@ namespace Dynamite {
     }
 
     void Dynamite::SetupLogger() {
-        log = spdlog::basic_logger_st(logName, logPath.string(), true);
+        log = spdlog::basic_logger_mt(logName, logPath.string(), true);
         spdlog::set_default_logger(log);
         // using `flush_every` with multithreaded logger will result in application hang during DLL_PROCESS_DETACH
         spdlog::flush_on(spdlog::level::info);
@@ -164,6 +167,9 @@ namespace Dynamite {
         SetFuncPtrs();
         ReadConfig();
         CreateHooks();
+        LocalBuddy::Install();
+        BuddyScans::Install();
+        DogReplica::Install();
         // PartnerHorse::Install(); disabled: forcing a second horse breaks co-op joining (2026-11-07), rework before enabling
         dynamiteCore.WithConfig(&cfg);
     }

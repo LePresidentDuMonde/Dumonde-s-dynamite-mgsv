@@ -9,6 +9,7 @@ import (
 )
 
 //go:embed coop_essentials/coop_essentials.fpkd
+//go:embed dog_replicas/*.fox2
 //go:embed tl/*
 //go:embed init_fpkd/*
 //go:embed s*_area_fpkd/*
@@ -62,6 +63,21 @@ type AddToQar struct {
 var OutsideScripts embed.FS
 
 var ReplaceInFPK = []UpdateInFpk{
+	{
+		Source:     FileFromQar{SourceQar: filepath.Join("master", "chunk2.dat"), NameInQar: "/Assets/tpp/pack/mission2/free/f30010/f30010.fpkd"},
+		Compressed: true,
+		Delete:     []string{"/Assets/tpp/level_asset/chara/player/game_object/single_pl2_instance_scarf.fox2"},
+	},
+	{
+		Source:     FileFromQar{SourceQar: filepath.Join("master", "chunk2.dat"), NameInQar: "/Assets/tpp/pack/mission2/free/f30010/f30011.fpkd"},
+		Compressed: true,
+		Delete:     []string{"/Assets/tpp/level_asset/chara/player/game_object/single_pl2_instance_scarf.fox2"},
+	},
+	{
+		Source:     FileFromQar{SourceQar: filepath.Join("master", "chunk4.dat"), NameInQar: "/Assets/tpp/pack/mission2/free/f30020/f30020.fpkd"},
+		Compressed: true,
+		Delete:     []string{"/Assets/tpp/level_asset/chara/player/game_object/single_player2_instance.fox2"},
+	},
 	{
 		// skip logos, skip "this game uses autosave" prompt
 		Source: FileFromQar{
@@ -1110,6 +1126,14 @@ var ReplaceInFPK = []UpdateInFpk{
 }
 
 var ReplaceInQAR = []AddToQar{
+	{
+		SourceFile: "standalone/DynamiteBuddy.lua",
+		FileName:   "/Assets/tpp/script/lib/DynamiteBuddy.lua",
+	},
+	{
+		SourceFile: "standalone/DynamiteCoop.lua",
+		FileName:   "/Assets/tpp/script/lib/DynamiteCoop.lua",
+	},
 	{
 		// 00.dat
 		// add script_loader

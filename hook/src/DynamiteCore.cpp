@@ -3,9 +3,11 @@
 #include "DynamiteHook.h"
 #include "EmblemInfo.h"
 #include "ScriptVarResult.h"
+#include "ScriptVariableHandle.h"
 #include "Tpp/TppGameObject.h"
 #include "Tpp/TppNPCLifeState.h"
 #include "memtag.h"
+#include <array>
 #include "mgsvtpp_func_typedefs.h"
 #include "util.h"
 
@@ -224,26 +226,21 @@ namespace Dynamite {
         const auto hash = (uint32_t)(FoxStrHash32(varName.c_str(), varName.length()) & 0xffffffff);
         const auto catHash = (uint32_t)(FoxStrHash32(catName.c_str(), catName.length()) & 0xffffffff);
 
-        const auto qt = GetQuarkSystemTable();
-        const auto v1 = *(uint64_t *)((char *)qt + 0x98);
-        const auto scriptSystemImpl = *(void **)(v1 + 0x18);
-
         ScriptVarResult s{};
-
-        const auto handle = BlockHeapAlloc(8, 8, MEMTAG_TPP_SYSTEM2SCRIPT);
-        TppGmImplScriptSystemImplGetScriptDeclVarHandle(scriptSystemImpl, handle, catHash, hash);
-        if (handle == nullptr) {
+        ScriptVariableHandle handle{};
+        TppGmImplScriptSystemImplGetScriptDeclVarHandle(nullptr, &handle, catHash, hash);
+        if (handle.base == 0) {
             spdlog::error("{}, no handle for var {}.{}", __PRETTY_FUNCTION__, catName, varName);
             return s;
         }
 
-        auto varType = *(unsigned char *)((char *)handle + 0xC) & 7;
+        auto varType = handle.flags & 7;
         if (varType > TYPE_MAX) {
             spdlog::error("{}, invalid var type {}.{} {}", __PRETTY_FUNCTION__, catName, varName, varType);
             return s;
         }
 
-        auto arraySize = *(unsigned short *)((char *)handle + 0x8);
+        auto arraySize = handle.count;
         if (arraySize == 0) {
             spdlog::error("{}, invalid var size {}.{}: {}", __PRETTY_FUNCTION__, catName, varName, arraySize);
             return s;
@@ -283,9 +280,9 @@ namespace Dynamite {
 
         s.type = static_cast<TppVarType>(varType);
 
-        const auto dataStart = *(unsigned short *)((char *)handle + 0xA);
-        const auto offset = *(uint64_t *)handle;
-        BlockHeapFree(handle);
+        const auto dataStart = handle.start;
+        const auto offset = handle.base;
+
         for (int i = 0; i < arraySize; i++) {
             if (varType == TYPE_BOOL) {
                 auto res = (*(unsigned char *)(((i + dataStart) >> 3) + offset) & 1 << ((unsigned char)(i + dataStart) & 7)) != 0;
@@ -441,48 +438,24 @@ namespace Dynamite {
         emblemCreated = false;
     }
 
+    // Keep the public Lua names for existing mission scripts. Native world reads
+    // now run from the game update, so streamed actors cannot be freed concurrently.
     void DynamiteCore::StartNearestEnemyThread() {
-        spdlog::info("{}", __FUNCTION__);
-
-        if (!cfg->Host) {
-            spdlog::info("{}, not starting for client", __FUNCTION__);
-            return;
-        }
-
-        if (nearestPlayerThread.joinable()) {
-            spdlog::info("{}, nearest enemy thread already running", __FUNCTION__);
-            return;
-        }
-
-        nearestPlayerThread = std::jthread([this](const std::stop_token &stoken) {
-            spdlog::info("{}, starting", __PRETTY_FUNCTION__);
-            while (!stoken.stop_requested()) {
-                auto opID = GetNearestPlayer();
-                if (cfg->debug.playerTarget) {
-                    if (opID != offensePlayerID) {
-                        spdlog::info("changing offense player ID from {:d} to {:d}", offensePlayerID, opID);
-                    }
-                }
-                offensePlayerID = opID;
-
-                using namespace std::chrono_literals;
-                std::this_thread::sleep_for(500ms);
-            }
-
-            spdlog::info("{}, stopping", __PRETTY_FUNCTION__);
-        });
+        nearestPlayerUpdates = cfg != nullptr && cfg->Host;
+        nextNearestPlayerUpdate = std::chrono::steady_clock::now();
     }
 
-    void DynamiteCore::StopNearestEnemyThread() {
-        spdlog::info("{}", __PRETTY_FUNCTION__);
-        if (nearestPlayerThread.joinable()) {
-            nearestPlayerThread.request_stop();
-            nearestPlayerThread.join();
-        }
+    void DynamiteCore::StopNearestEnemyThread() { nearestPlayerUpdates = false; }
+
+    bool DynamiteCore::IsNearestEnemyThreadRunning() const { return nearestPlayerUpdates; }
+
+    void DynamiteCore::UpdateNearestEnemy() {
+        if (!nearestPlayerUpdates) return;
+        const auto now = std::chrono::steady_clock::now();
+        if (now < nextNearestPlayerUpdate) return;
+        nextNearestPlayerUpdate = now + std::chrono::milliseconds(500);
+        offensePlayerID = GetNearestPlayer();
     }
-
-    bool DynamiteCore::IsNearestEnemyThreadRunning() const { return nearestPlayerThread.joinable(); }
-
     unsigned int DynamiteCore::GetOffensePlayerID() const { return offensePlayerID; }
 
     unsigned int DynamiteCore::GetDefensePlayerID() const { return defensePlayerID; }

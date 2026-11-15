@@ -1200,6 +1200,11 @@ end
 
 
 this.FuncMissionReload = function()
+	-- Several BreakGimmick notifications can finish the same explosion chain.
+	if mvars.dyn_mission13ReloadRequested then return end
+	mvars.dyn_mission13ReloadRequested = true
+	-- Remember the guest before the host can disconnect it during the fade.
+	DynamiteCoop.RememberMissionReload()
 
 	local reloadCheckpointName = ReloadCheckpointNameTable[svars.isFultoned_child1]
 	CHECKPOINT_NAME = reloadCheckpointName
@@ -1597,12 +1602,6 @@ sequences.Seq_Demo_InAfrica = {
 	end,
 
 	OnEnter = function()
-		if TppGameStatus.IsSet("Mission", "S_IS_ONLINE") then
-			TppCoder.SetWorldCenter(Vector3(-569.03827, -3.9259033, 312.8404))
-			TppNetworkUtil.SessionEnableAccept( true )
-			Dynamite.StartNearestEnemyThread()
-		end
-
 		TppMission.UpdateObjective{
 			
 			objectives = { 

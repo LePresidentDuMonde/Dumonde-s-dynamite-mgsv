@@ -2351,6 +2351,13 @@ function e.OnAllocate(e)
 	else
 		mvars.ply_equipMissionBlockGroupSize = TppDefine.DEFAULT_EQUIP_MISSION_BLOCK_GROUP_SIZE
 	end
+	-- Pitch Dark overrides the default with 1,340,000 bytes (+100,000 above),
+	-- bypassing the existing co-op equipment/rendering budget in TppDefine.
+	if vars.missionCode == 10080 and TppMain.IsCoop(vars.missionCode) then
+		mvars.ply_equipMissionBlockGroupSize = math.max(
+			mvars.ply_equipMissionBlockGroupSize, TppDefine.DEFAULT_EQUIP_MISSION_BLOCK_GROUP_SIZE)
+		Dynamite.Log("mission 13: equipment block budget " .. mvars.ply_equipMissionBlockGroupSize)
+	end
 	if (e and e.sequence) and e.sequence.MAX_PICKABLE_LOCATOR_COUNT then
 		mvars.ply_maxPickableLocatorCount = e.sequence.MAX_PICKABLE_LOCATOR_COUNT
 	else

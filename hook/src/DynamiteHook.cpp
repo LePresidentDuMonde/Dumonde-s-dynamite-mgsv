@@ -1,4 +1,6 @@
 #include "DynamiteHook.h"
+#include "LocalBuddy.h"
+#include "SessionNotification.h"
 
 #include "BlockInfo.h"
 #include "BossQuietNextActionTaskActionCondition.h"
@@ -51,7 +53,10 @@ namespace Dynamite {
 
     bool IsOffenseTeamByOnlineFobLocalHook() { return true; }
 
-    unsigned int GetFobOffensePlayerInstanceIndexHook(void *) { return g_hook->dynamiteCore.GetOffensePlayerID(); }
+    unsigned int GetFobOffensePlayerInstanceIndexHook(void *) {
+        if(LocalBuddy::IsLocalExecution()) return LocalBuddy::Owner();
+        return g_hook->dynamiteCore.GetOffensePlayerID();
+    }
 
     unsigned int GetFobDefensePlayerInstanceIndexHook(void *) { return g_hook->dynamiteCore.GetDefensePlayerID(); }
 
@@ -99,7 +104,7 @@ namespace Dynamite {
         if ((g_hook->cfg.whitelist.empty()) && (g_hook->cfg.blacklist.empty())) {
             spdlog::info("{}: Connection accepted", __PRETTY_FUNCTION__);
             SteamUdpSocketImplOnP2PSessionRequest(thisPtr, request);
-            g_hook->dynamiteSyncImpl.packetSeen = 0;
+            g_hook->dynamiteSyncImpl.Init();
             return;
         }
 
@@ -119,7 +124,7 @@ namespace Dynamite {
 
             spdlog::info("{}: Connection accepted (whitelist match)", __PRETTY_FUNCTION__);
             SteamUdpSocketImplOnP2PSessionRequest(thisPtr, request);
-            g_hook->dynamiteSyncImpl.packetSeen = 0;
+            g_hook->dynamiteSyncImpl.Init();
             return;
         }
 
@@ -130,6 +135,7 @@ namespace Dynamite {
             }
         }
 
+        g_hook->dynamiteSyncImpl.Init();
         SteamUdpSocketImplOnP2PSessionRequest(thisPtr, request);
     }
 
@@ -553,8 +559,9 @@ namespace Dynamite {
     }
 
     bool StatusControllerImplIsSetHook(void *StatusControllerImpl, unsigned char param_1) {
+        if (param_1 == TppGameStatusFlag::S_IS_ONLINE && (LocalBuddy::IsLocalCreation() || LocalBuddy::IsLocalExecution())) return false;
         const auto res = StatusControllerImplIsSet(StatusControllerImpl, param_1);
-        if (param_1 == TppGameStatusFlag::S_IS_ONLINE) {
+        if (g_hook->cfg.debug.statusControllerIsOnline && param_1 == TppGameStatusFlag::S_IS_ONLINE) {
             spdlog::info("{}, {} -> {}", __PRETTY_FUNCTION__, "S_IS_ONLINE", res);
         }
 
@@ -862,6 +869,10 @@ namespace Dynamite {
     void TppGmImplScriptDeclVarsImplUpdateHook(void *ScriptDeclVarsImpl) { TppGmImplScriptDeclVarsImplUpdate(ScriptDeclVarsImpl); }
 
     void TppGmImplScriptDeclVarsImplOnSessionNotifyHook(void *ScriptDeclVarsImpl, void *SessionInterface, const int param_2, void *param_3) {
+        if (!CanForwardScriptSessionNotification(ScriptDeclVarsImpl, SessionInterface, param_2, param_3)) {
+            spdlog::warn("script session notification ignored: joining member no longer exists (type {})", param_2);
+            return;
+        }
         if (param_2 != 4) {
             spdlog::info("{}, notification type {}, ignoring", __PRETTY_FUNCTION__, param_2);
             TppGmImplScriptDeclVarsImplOnSessionNotify(ScriptDeclVarsImpl, SessionInterface, param_2, param_3);
@@ -1003,29 +1014,25 @@ namespace Dynamite {
     }
 
     int32_t FoxNioImplSteamUdpSocketImplRecvHook(void *SteamUdpSocketImpl, void *buffer, int maxBufferSize, void *SocketInfo, void *Address) {
-        auto responseSize = FoxNioImplSteamUdpSocketImplRecv(SteamUdpSocketImpl, buffer, maxBufferSize, SocketInfo, Address);
-        if (responseSize < sizeof(DYNAMITE_RAW_HEADER)) {
-            return responseSize;
+        return ReceiveGameDatagram(buffer,maxBufferSize,
+            [&] { return FoxNioImplSteamUdpSocketImplRecv(SteamUdpSocketImpl,buffer,maxBufferSize,SocketInfo,Address); },
+            [&](void *data,int32_t size) { g_hook->dynamiteSyncImpl.RecvRaw(data,size); });
+    }
+
+    void Player2GameObjectImplWarpHook(void *self, uint32_t objectID, Vector3 *pos, Quat *rot, bool wait) {
+        static std::atomic<ULONGLONG> previous{0};
+        const auto now=GetTickCount64();
+        auto last=previous.load();
+        if (pos && now-last>=1000 && previous.compare_exchange_strong(last,now)) {
+            spdlog::warn("native player warp: host={} object={} destination=({},{},{}) wait={}",
+                g_hook->cfg.Host,objectID,pos->x,pos->y,pos->z,wait);
+            void *frames[8]{};
+            const auto count=CaptureStackBackTrace(1,8,frames,nullptr);
+            const auto base=reinterpret_cast<uintptr_t>(GetModuleHandle(nullptr));
+            for (USHORT i=0;i<count;++i)
+                spdlog::info("native warp frame {}: address={:#x} exe_base={:#x}",i,reinterpret_cast<uintptr_t>(frames[i]),base);
         }
-
-        if (responseSize < 0) {
-            return responseSize;
-        }
-
-        if (memcmp(buffer, &DYNAMITE_RAW_HEADER, sizeof(DYNAMITE_RAW_HEADER)) != 0) {
-            return responseSize;
-        }
-
-        auto dumpSize = responseSize;
-        if (dumpSize > 50) {
-            dumpSize = 50;
-        }
-
-        auto bytes = bytes_to_hex(buffer, dumpSize);
-        spdlog::debug("{}, bufSize={}, responseSize={}, dump={}", __PRETTY_FUNCTION__, maxBufferSize, responseSize, bytes);
-        g_hook->dynamiteSyncImpl.RecvRaw(buffer, responseSize);
-
-        return responseSize;
+        Player2GameObjectImplWarp(self,objectID,pos,rot,wait);
     }
 
     void *TppUiEmblemImplEmblemEditorSystemImplCreateEmblemParametersHook(void *EmblemEditorSystemImpl, void *ErrorCode, void *EmblemTextureParameters,

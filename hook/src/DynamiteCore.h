@@ -8,7 +8,7 @@
 #include "Tpp/TppNPCLifeState.h"
 #include "Tpp/TppTypes.h"
 
-#include <thread>
+#include <chrono>
 
 namespace Dynamite {
     class DynamiteCore {
@@ -29,6 +29,7 @@ namespace Dynamite {
         void StartNearestEnemyThread();
         void StopNearestEnemyThread();
         bool IsNearestEnemyThreadRunning() const;
+        void UpdateNearestEnemy();
         unsigned int GetOffensePlayerID() const;
         unsigned int GetDefensePlayerID() const;
         void ResetState();
@@ -54,7 +55,8 @@ namespace Dynamite {
         unsigned int offensePlayerID = 0;
         unsigned int defensePlayerID = 15;
         Config *cfg = nullptr;
-        std::jthread nearestPlayerThread;
+        bool nearestPlayerUpdates = false;
+        std::chrono::steady_clock::time_point nextNearestPlayerUpdate;
         uint32_t missionsCompleted = 0;
         std::filesystem::path missionsFilename = std::filesystem::path("dynamite") / std::filesystem::path("missions.txt");
     };

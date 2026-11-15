@@ -7,10 +7,16 @@
 #include "Tpp/BossQuietDamage.h"
 #include "flatbuffers/flatbuffers.h"
 #include "memtag.h"
+#include <array>
 #include "mgsvtpp_func_typedefs.h"
 #include "spdlog/spdlog.h"
 #include "util.h"
+#include "MessageValidation.h"
+#include "ScriptVariableHandle.h"
+#include "BuddyScans.h"
 
+#include <array>
+#include <bit>
 #include <ranges>
 #include <vector>
 
@@ -27,6 +33,7 @@ namespace Dynamite {
     void DynamiteSyncImpl::SyncInit() {
         spdlog::info("{}", __PRETTY_FUNCTION__);
         syncStatus.clear();
+        syncReceived.clear();
 
         for (const auto &v : enemyVars) {
             spdlog::info("{}, {}", __PRETTY_FUNCTION__, v);
@@ -36,9 +43,20 @@ namespace Dynamite {
 
     void DynamiteSyncImpl::Init() {
         spdlog::info("{}", __PRETTY_FUNCTION__);
-
-        packetNumber = 0;
-        packetSeen = 0;
+        std::lock_guard lock(runtimeMutex);
+        static std::atomic<uint64_t> epochs{static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count())};
+        localEpoch = epochs.fetch_add(1) + 1;
+        peerEpoch = 0;
+        pendingPeerEpoch = 0;
+        replay = {};
+        questSequence = 0;
+        questState.reset();
+        buddyScans.Reset();
+        dogReplica.Reset();
+        entitySequences.clear();
+        { std::lock_guard queueLock(incomingMutex); incoming.clear(); }
+        { std::lock_guard queueLock(carryDropsMutex); carryDrops.clear(); }
+        { std::lock_guard queueLock(vehicleStatesMutex); vehicleStates.clear(); vehicleSent.clear(); }
     }
 
     void DynamiteSyncImpl::Stop() {
@@ -49,8 +67,7 @@ namespace Dynamite {
         }
         spdlog::info("{}, sync thread {}", __PRETTY_FUNCTION__, syncThread.joinable());
 
-        packetNumber = 0;
-        packetSeen = 0;
+        Init();
 
         steamUDPSocket = nullptr;
         steamUDPAddress = nullptr;
@@ -150,22 +167,22 @@ namespace Dynamite {
 
     void DynamiteSyncImpl::Ping() {
         spdlog::info("{}", __PRETTY_FUNCTION__);
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(512);
         const auto sv = DynamiteMessage::CreatePing(builder, 1);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_Ping, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_Ping, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}, res {}", __PRETTY_FUNCTION__, res);
     }
 
     void DynamiteSyncImpl::RequestVar(const std::string &catName, const std::string &varName) {
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(512);
         const flatbuffers::Offset<flatbuffers::String> category = builder.CreateString(catName);
         const flatbuffers::Offset<flatbuffers::String> name = builder.CreateString(varName);
         const auto sv = DynamiteMessage::CreateRequestVar(builder, category, name);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_RequestVar, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_RequestVar, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}, request for {}.{}, res {}", __PRETTY_FUNCTION__, catName, varName, res);
@@ -195,11 +212,11 @@ namespace Dynamite {
     }
 
     void DynamiteSyncImpl::AddFollowUserMarker(const Vector3 *pos, const uint32_t objectID) {
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(128);
         const auto p = DynamiteMessage::Vec3(pos->x, pos->y, pos->z);
         const auto sv = DynamiteMessage::CreateAddFollowUserMarker(builder, &p, objectID);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_AddFollowUserMarker, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_AddFollowUserMarker, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}: {}", __PRETTY_FUNCTION__, res);
@@ -225,10 +242,10 @@ namespace Dynamite {
     }
 
     void DynamiteSyncImpl::RemoveUserMarker(const uint32_t markerID) {
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(128);
         const auto sv = DynamiteMessage::CreateRemoveUserMarker(builder, markerID);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_RemoveUserMarker, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_RemoveUserMarker, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}: {}", __PRETTY_FUNCTION__, res);
@@ -246,31 +263,25 @@ namespace Dynamite {
         Marker2SystemImplRemovedUserMarker(hookState.markerSystemImpl, m->marker_id());
     }
 
-    void DynamiteSyncImpl::SetSightMarker(const uint32_t objectID, const uint32_t duration) {
-        packetNumber++;
+    void DynamiteSyncImpl::SetSightMarker(const uint32_t objectID, const float duration) {
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(128);
         const auto sv = DynamiteMessage::CreateSetSightMarker(builder, objectID, duration);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_SetSightMarker, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_SetSightMarker, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}: {}", __PRETTY_FUNCTION__, res);
     }
 
     void DynamiteSyncImpl::HandleSetSightMarker(const DynamiteMessage::MessageWrapper *w) {
-        if (hookState.sightManagerImpl == nullptr) {
-            spdlog::error("{}, sight manager is null!", __PRETTY_FUNCTION__);
-
-            return;
-        }
-
         const auto m = w->msg_as_SetSightMarker();
-        spdlog::info("{}, objectID {}, duration {}", __PRETTY_FUNCTION__, m->object_id(), m->duration());
-        auto ok = SightManagerImplSetMarker(hookState.sightManagerImpl, m->object_id(), m->duration());
-        spdlog::info("{}: {}", __PRETTY_FUNCTION__, ok);
+        // The old cached SightManager belonged to whichever player initialized last.
+        // The object dispatcher addresses the current world directly, without replaying marking rewards.
+        BuddyScans::ApplyManual(m->object_id(),m->duration());
     }
 
     void DynamiteSyncImpl::SendEmblem() {
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(256);
 
         const auto info = g_hook->dynamiteCore.GetEmblemInfo();
@@ -286,7 +297,7 @@ namespace Dynamite {
         };
 
         const auto sv = DynamiteMessage::CreateSendEmblem(builder, &emblem_info);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_SendEmblem, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_SendEmblem, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}: {}", __PRETTY_FUNCTION__, res);
@@ -323,261 +334,51 @@ namespace Dynamite {
     }
 
     void DynamiteSyncImpl::SyncVar(const std::string &catName, const std::string &varName) {
-        const auto hash = (uint32_t)(FoxStrHash32(varName.c_str(), varName.length()) & 0xffffffff);
-        const auto catHash = (uint32_t)(FoxStrHash32(catName.c_str(), catName.length()) & 0xffffffff);
-
-        const auto qt = GetQuarkSystemTable();
-        const auto v1 = *(uint64_t *)((char *)qt + 0x98);
-        const auto scriptSystemImpl = *(void **)(v1 + 0x18);
-
-        auto handle = BlockHeapAlloc(8, 8, MEMTAG_TPP_SYSTEM2SCRIPT);
-        TppGmImplScriptSystemImplGetScriptDeclVarHandle(scriptSystemImpl, handle, catHash, hash);
-        if (handle == nullptr) {
-            spdlog::error("{}, no handle for var {}.{}", __PRETTY_FUNCTION__, catName, varName);
-            return;
-        }
-
-        auto varType = *(unsigned char *)((char *)handle + 0xC) & 7;
-        if (varType > TYPE_MAX) {
-            spdlog::error("{}, invalid var type {}.{} {}", __PRETTY_FUNCTION__, catName, varName, varType);
-            return;
-        }
-
-        auto arraySize = *(unsigned short *)((char *)handle + 0x8);
-        if (arraySize == 0) {
-            spdlog::error("{}, invalid var size {}.{}: {}", __PRETTY_FUNCTION__, catName, varName, arraySize);
-            return;
-        }
-
-        spdlog::info("{}: {}, type {}, size {}", __PRETTY_FUNCTION__, varName, varType, arraySize);
-
-        auto elementSize = 1;
-
-        DynamiteMessage::ArrayValues valType = DynamiteMessage::ArrayValues_NONE;
-
-        switch (varType) {
-        case TYPE_INT32:
-            valType = DynamiteMessage::ArrayValues_Int32;
-            elementSize = 4;
-            break;
-        case TYPE_UINT32:
-            valType = DynamiteMessage::ArrayValues_Uint32;
-            elementSize = 4;
-            break;
-        case TYPE_FLOAT:
-            valType = DynamiteMessage::ArrayValues_Float;
-            elementSize = 4;
-            break;
-        case TYPE_INT8:
-            valType = DynamiteMessage::ArrayValues_Int8;
-            elementSize = 1;
-            break;
-        case TYPE_UINT8:
-            valType = DynamiteMessage::ArrayValues_Uint8;
-            elementSize = 1;
-            break;
-        case TYPE_INT16:
-            valType = DynamiteMessage::ArrayValues_Int16;
-            elementSize = 2;
-            break;
-        case TYPE_UINT16:
-            valType = DynamiteMessage::ArrayValues_Uint16;
-            elementSize = 2;
-            break;
-        case TYPE_BOOL:
-            valType = DynamiteMessage::ArrayValues_Bool;
-            break;
-        default:
-            break;
-        }
-
-        if (valType == DynamiteMessage::ArrayValues_NONE) {
-            spdlog::error("{}, valType is NONE", __PRETTY_FUNCTION__);
-            return;
-        }
-
-        std::vector<bool> bools;
-        std::vector<int32_t> int32s;
-        std::vector<uint32_t> uint32s;
-        std::vector<float> floats;
-        std::vector<int8_t> int8s;
-        std::vector<uint8_t> uint8s;
-        std::vector<int16_t> int16s;
-        std::vector<uint16_t> uint16s;
-
-        const auto dataStart = *(unsigned short *)((char *)handle + 0xA);
-        const auto offset = *(uint64_t *)handle;
-        BlockHeapFree(handle);
-        for (int i = 0; i < arraySize; i++) {
-            if (varType == TYPE_BOOL) {
-                auto res = (*(unsigned char *)(((i + dataStart) >> 3) + offset) & 1 << ((unsigned char)(i + dataStart) & 7)) != 0;
-                bools.push_back(res);
-
-                spdlog::info("{}, {}, {}: {}", __PRETTY_FUNCTION__, varName, i, res);
-                continue;
+        if (!g_hook->cfg.Host || !CoopReady() || catName != "svars" ||
+            std::ranges::find(enemyVars, varName) == enemyVars.end()) return;
+        const auto values = g_hook->dynamiteCore.GetSVar(catName, varName);
+        const auto publish = [&](const auto &items, DynamiteMessage::ArrayValues type, auto createValues) {
+            for (size_t start = 0; start < items.size(); start += 128) {
+                const auto count = std::min(size_t{128}, items.size() - start);
+                using Value = typename std::decay_t<decltype(items)>::value_type;
+                const std::vector<Value> chunk(items.begin() + start, items.begin() + start + count);
+                flatbuffers::FlatBufferBuilder builder(768);
+                const auto category = builder.CreateString(catName);
+                const auto name = builder.CreateString(varName);
+                const auto data = createValues(builder, chunk);
+                const auto variable = DynamiteMessage::CreateSyncVar(builder, category, name, items.size(), start, type, data);
+                const auto packet = packetNumber.fetch_add(1) + 1;
+                builder.Finish(WrapMessage(builder, packet, DynamiteMessage::Message_SyncVar, variable.Union()));
+                if (!SendRaw(&builder)) return;
             }
-
-            auto value = offset + (dataStart + i) * elementSize;
-            // spdlog::info("{}, {}, value addr {:x}, offset {:x}", __PRETTY_FUNCTION__, i, value, offset);
-            switch (varType) {
-            case TYPE_INT32:
-                spdlog::info("{}, {}, {}: {}", __PRETTY_FUNCTION__, varName, i, *(int32_t *)value);
-                int32s.push_back(*(int32_t *)value);
-                break;
-            case TYPE_UINT32: {
-                if (*(uint32_t *)value != 0) {
-                    spdlog::info("{}, {} {}: {}", __PRETTY_FUNCTION__, varName, i, *(uint32_t *)value);
-                }
-                uint32s.push_back(*(uint32_t *)value);
-                break;
-            }
-            case TYPE_FLOAT:
-                spdlog::info("{}, {} {}: {}", __PRETTY_FUNCTION__, varName, i, *(float *)value);
-                floats.push_back(*(float *)value);
-                break;
-            case TYPE_INT8:
-                spdlog::info("{}, {} {}: {:d}", __PRETTY_FUNCTION__, varName, i, *(signed char *)value);
-                int8s.push_back(*(int8_t *)value);
-                break;
-            case TYPE_UINT8:
-                spdlog::info("{}, {} {}: {}", __PRETTY_FUNCTION__, varName, i, *(unsigned char *)value);
-                uint8s.push_back(*(uint8_t *)value);
-                break;
-            case TYPE_INT16:
-                spdlog::info("{}, {} {}: {}", __PRETTY_FUNCTION__, varName, i, *(short *)value);
-                int16s.push_back(*(int16_t *)value);
-                break;
-            case TYPE_UINT16:
-                spdlog::info("{}, {} {}: {}", __PRETTY_FUNCTION__, varName, i, *(unsigned short *)value);
-                uint16s.push_back(*(uint16_t *)value);
-                break;
-            case TYPE_BOOL:
-            default:
-                break;
-            }
+        };
+        switch (values.type) {
+#define SEND_VALUES(Type, Field, Name) case Type: publish(values.Field, DynamiteMessage::ArrayValues_##Name, [](auto &b, const auto &v) { return DynamiteMessage::Create##Name(b, b.CreateVector(v)).Union(); }); break;
+            SEND_VALUES(TYPE_BOOL, bools, Bool)
+            SEND_VALUES(TYPE_INT32, int32s, Int32)
+            SEND_VALUES(TYPE_UINT32, uint32s, Uint32)
+            SEND_VALUES(TYPE_FLOAT, floats, Float)
+            SEND_VALUES(TYPE_INT8, int8s, Int8)
+            SEND_VALUES(TYPE_UINT8, uint8s, Uint8)
+            SEND_VALUES(TYPE_INT16, int16s, Int16)
+            SEND_VALUES(TYPE_UINT16, uint16s, Uint16)
+#undef SEND_VALUES
+        default: break;
         }
-
-        spdlog::info("{}, values pushed", __PRETTY_FUNCTION__);
-
-        flatbuffers::FlatBufferBuilder builder(1024);
-        const flatbuffers::Offset<flatbuffers::String> category = builder.CreateString(catName);
-        const flatbuffers::Offset<flatbuffers::String> name = builder.CreateString(varName);
-
-        flatbuffers::Offset<DynamiteMessage::Bool> bools_offset;
-        flatbuffers::Offset<DynamiteMessage::Int8> int8s_offset;
-        flatbuffers::Offset<DynamiteMessage::Uint8> uint8s_offset;
-        flatbuffers::Offset<DynamiteMessage::Int16> int16s_offset;
-        flatbuffers::Offset<DynamiteMessage::Uint16> uint16s_offset;
-        flatbuffers::Offset<DynamiteMessage::Int32> int32s_offset;
-        flatbuffers::Offset<DynamiteMessage::Uint32> uint32s_offset;
-        flatbuffers::Offset<DynamiteMessage::Float> floats_offset;
-
-        switch (varType) {
-        case TYPE_BOOL: {
-            auto v = builder.CreateVector(bools);
-            bools_offset = DynamiteMessage::CreateBool(builder, v);
-            break;
-        }
-        case TYPE_INT32: {
-            auto v = builder.CreateVector(int32s);
-            int32s_offset = DynamiteMessage::CreateInt32(builder, v);
-            break;
-        }
-        case TYPE_UINT32: {
-            auto v = builder.CreateVector(uint32s);
-            uint32s_offset = DynamiteMessage::CreateUint32(builder, v);
-            break;
-        }
-        case TYPE_FLOAT: {
-            auto v = builder.CreateVector(floats);
-            floats_offset = DynamiteMessage::CreateFloat(builder, v);
-            break;
-        }
-        case TYPE_INT8: {
-            auto v = builder.CreateVector(int8s);
-            int8s_offset = DynamiteMessage::CreateInt8(builder, v);
-            break;
-        }
-        case TYPE_UINT8: {
-            auto v = builder.CreateVector(uint8s);
-            uint8s_offset = DynamiteMessage::CreateUint8(builder, v);
-            break;
-        }
-        case TYPE_INT16: {
-            auto v = builder.CreateVector(int16s);
-            int16s_offset = DynamiteMessage::CreateInt16(builder, v);
-            break;
-        }
-        case TYPE_UINT16: {
-            auto v = builder.CreateVector(uint16s);
-            uint16s_offset = DynamiteMessage::CreateUint16(builder, v);
-            break;
-        }
-        default:
-            break;
-        }
-
-        DynamiteMessage::SyncVarBuilder svb(builder);
-
-        auto arrayStart = 0;
-        svb.add_category(category);
-        svb.add_name(name);
-        svb.add_array_size(arraySize);
-        svb.add_array_start(arrayStart);
-        svb.add_array_values_type(valType);
-
-        switch (varType) {
-        case TYPE_BOOL: {
-            svb.add_array_values(bools_offset.Union());
-            break;
-        }
-        case TYPE_INT32: {
-            svb.add_array_values(int32s_offset.Union());
-            break;
-        }
-        case TYPE_UINT32: {
-            svb.add_array_values(uint32s_offset.Union());
-            break;
-        }
-        case TYPE_FLOAT: {
-            svb.add_array_values(floats_offset.Union());
-            break;
-        }
-        case TYPE_INT8: {
-            svb.add_array_values(int8s_offset.Union());
-            break;
-        }
-        case TYPE_UINT8: {
-            svb.add_array_values(uint8s_offset.Union());
-            break;
-        }
-        case TYPE_INT16: {
-            svb.add_array_values(int16s_offset.Union());
-            break;
-        }
-        case TYPE_UINT16: {
-            svb.add_array_values(uint16s_offset.Union());
-            break;
-        }
-        default:
-            break;
-        }
-        auto svo = svb.Finish();
-
-        packetNumber++;
-        DynamiteMessage::MessageWrapperBuilder mwb(builder);
-        mwb.add_msg_type(DynamiteMessage::Message_SyncVar);
-        mwb.add_msg(svo.Union());
-        mwb.add_packet_num(packetNumber);
-
-        auto mo = mwb.Finish();
-        builder.Finish(mo);
-        auto res = SendRaw(&builder);
-        spdlog::info("{}: send: {}", __PRETTY_FUNCTION__, res);
     }
-
     void DynamiteSyncImpl::HandleSyncVar(const DynamiteMessage::MessageWrapper *w) {
         const auto m = w->msg_as_SyncVar();
+        if (!m || !m->name() || !m->category() || !ValidMessage(w) || g_hook->cfg.Host) return;
+        ScriptVariableHandle local{};
+        // The native wrapper dispatches on the category hash; its first argument is unused.
+        TppGmImplScriptSystemImplGetScriptDeclVarHandle(nullptr, &local,
+            static_cast<uint32_t>(FoxStrHash32(m->category()->c_str(), m->category()->size())),
+            static_cast<uint32_t>(FoxStrHash32(m->name()->c_str(), m->name()->size())));
+        if (local.base == 0 || local.count != m->array_size() ||
+            static_cast<unsigned>(m->array_values_type()) != (local.flags & 7u) + 1u) return;
+        if (const auto floats = m->array_values_as_Float()) {
+            for (const auto value : *floats->value()) if (!std::isfinite(value)) return;
+        }
         spdlog::info("{}: {}.{}, size {}, start {}, type {}",
             __PRETTY_FUNCTION__,
             m->category()->c_str(),
@@ -586,21 +387,14 @@ namespace Dynamite {
             m->array_start(),
             static_cast<short>(m->array_values_type()));
 
-        void *vars = nullptr;
-        if (strcmp(m->category()->c_str(), "gvars") == 0) {
-            vars = TppGmGetGVars();
-        }
-
-        if (strcmp(m->category()->c_str(), "svars") == 0) {
-            vars = TppGmGetSVars();
-        }
+        void *vars = TppGmGetSVars();
 
         if (vars == nullptr) {
             spdlog::error("{}, bad category {}", __PRETTY_FUNCTION__, m->category()->c_str());
             return;
         }
 
-        auto name = FoxStrHash32(m->name()->c_str(), strlen(m->name()->c_str())) & 0xffffffff;
+        auto name = FoxStrHash32(m->name()->c_str(), m->name()->size()) & 0xffffffff;
         auto varIndex = TppGmImplScriptDeclVarsImplGetVarIndexWithName(vars, name);
         spdlog::info("{}, {}.{} index {}", __PRETTY_FUNCTION__, m->category()->c_str(), m->name()->c_str(), varIndex);
         if (varIndex == 0xffffffff) {
@@ -639,7 +433,20 @@ namespace Dynamite {
             break;
         }
 
-        syncStatus[m->name()->c_str()] = res;
+        if (res) {
+            auto &received = syncReceived[m->name()->str()];
+            if (received.size() != local.count) received.assign(local.count, false);
+            uint32_t count = 0;
+            switch (m->array_values_type()) {
+#define CHUNK_COUNT(Name) case DynamiteMessage::ArrayValues_##Name: count = m->array_values_as_##Name()->value()->size(); break;
+                CHUNK_COUNT(Bool) CHUNK_COUNT(Int32) CHUNK_COUNT(Uint32) CHUNK_COUNT(Float)
+                CHUNK_COUNT(Int8) CHUNK_COUNT(Uint8) CHUNK_COUNT(Int16) CHUNK_COUNT(Uint16)
+#undef CHUNK_COUNT
+            default: break;
+            }
+            for (uint32_t i = 0; i < count; ++i) received[m->array_start() + i] = true;
+            syncStatus[m->name()->str()] = std::ranges::all_of(received, [](bool value) { return value; });
+        }
     }
 
     bool DynamiteSyncImpl::SyncBoolVar(const DynamiteMessage::SyncVar *m, void *vars, const uint32_t varIndex) {
@@ -866,7 +673,7 @@ namespace Dynamite {
         spdlog::info("{}, setting {}.{}", __PRETTY_FUNCTION__, m->name()->c_str(), m->category()->c_str());
         for (size_t i = 0; i < values->size(); i++) {
             const auto val = values->Get(i);
-            ScriptDeclVarsImplSetVarValue(vars, varIndex, m->array_start() + i, 0, val);
+            ScriptDeclVarsImplSetVarValue(vars, varIndex, m->array_start() + i, 0, std::bit_cast<uint32_t>(val));
         }
 
         spdlog::info("{}, {}.{}: done", __PRETTY_FUNCTION__, m->name()->c_str(), m->category()->c_str());
@@ -885,12 +692,12 @@ namespace Dynamite {
             spdlog::info("{}", __PRETTY_FUNCTION__);
         }
 
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(256);
         const std::vector<int8_t> vec(std::begin(command->data), std::end(command->data));
         const auto v = builder.CreateVector(vec);
         const auto sv = DynamiteMessage::CreateSendBossQuietActionCommand(builder, p1, v);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_SendBossQuietActionCommand, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_SendBossQuietActionCommand, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}, res {}", __PRETTY_FUNCTION__, res);
@@ -907,6 +714,7 @@ namespace Dynamite {
         }
 
         const auto m = w->msg_as_SendBossQuietActionCommand();
+        if (!m || !m->action_command() || m->action_command()->size() != sizeof(BossQuietActionCommand)) return;
         const auto command = m->action_command();
         BossQuietActionCommand cmd{};
         memcpy(&cmd, command->data(), sizeof(cmd));
@@ -921,12 +729,12 @@ namespace Dynamite {
         // always log, never seen this one
         spdlog::info("{}", __PRETTY_FUNCTION__);
 
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(256);
         const std::vector<uint8_t> vec(std::begin(command->data), std::end(command->data));
         const auto v = builder.CreateVector(vec);
         const auto sv = DynamiteMessage::CreateSendBossQuietExtraActionCommand(builder, p1, v);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_SendBossQuietExtraActionCommand, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_SendBossQuietExtraActionCommand, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}, res {}", __PRETTY_FUNCTION__, res);
@@ -942,6 +750,7 @@ namespace Dynamite {
         }
 
         const auto m = w->msg_as_SendBossQuietExtraActionCommand();
+        if (!m || !m->action_command() || m->action_command()->size() != sizeof(BossQuietActionCommand)) return;
         const auto command = m->action_command();
         BossQuietActionCommand cmd{};
         memcpy(&cmd, command->data(), sizeof(cmd));
@@ -954,7 +763,7 @@ namespace Dynamite {
             spdlog::info("{}, task=\n{}\ndump={}", __PRETTY_FUNCTION__, actionTask->ToString(), bytes_to_hex(actionTask, sizeof(BossQuietActionTask)));
         }
 
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(128 * 7);
 
         const auto byte_span = std::as_bytes(std::span{actionTask, 1});
@@ -979,7 +788,7 @@ namespace Dynamite {
         }
 
         const auto sv = DynamiteMessage::CreateSendBossQuietSetNextActionTask(builder, param_1, tv, at);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_SendBossQuietSetNextActionTask, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_SendBossQuietSetNextActionTask, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}, res {}", __PRETTY_FUNCTION__, res);
@@ -996,6 +805,7 @@ namespace Dynamite {
         }
 
         const auto m = w->msg_as_SendBossQuietSetNextActionTask();
+        if (!m || !m->action_task() || m->action_task()->size() != sizeof(BossQuietActionTask)) return;
 
         BossQuietActionTask action_task{};
         memcpy(&action_task, m->action_task()->data(), sizeof(BossQuietActionTask));
@@ -1028,7 +838,7 @@ namespace Dynamite {
             spdlog::info("{}", __PRETTY_FUNCTION__);
         }
 
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(128 * 7);
 
         const auto byte_span = std::as_bytes(std::span{task, 1});
@@ -1037,7 +847,7 @@ namespace Dynamite {
         const auto tv = builder.CreateVector(taskVec);
 
         const auto sv = DynamiteMessage::CreateSendBossQuietSetActionTask(builder, param_1, tv);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_SendBossQuietSetActionTask, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_SendBossQuietSetActionTask, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}, res {}", __PRETTY_FUNCTION__, res);
@@ -1054,6 +864,7 @@ namespace Dynamite {
         }
 
         const auto m = w->msg_as_SendBossQuietSetActionTask();
+        if (!m || !m->task() || m->task()->size() != sizeof(BossQuietActionTask)) return;
 
         const auto workPtr = (void *)((char *)hookState.bossQuietImplActionController + 0x20 + 0x48);
         BossQuietActionTask task{};
@@ -1069,12 +880,12 @@ namespace Dynamite {
             spdlog::info("{}", __PRETTY_FUNCTION__);
         }
 
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(128);
 
         const auto sv = DynamiteMessage::CreateSendBossQuietDamage(
             builder, damage->entityIndex, damage->currentLife, damage->lifeDamage, damage->currentStamina, damage->staminaDamage);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_SendBossQuietDamage, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_SendBossQuietDamage, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}, res {}", __PRETTY_FUNCTION__, res);
@@ -1149,12 +960,12 @@ namespace Dynamite {
 
     void DynamiteSyncImpl::AddFixedUserMarker(const Vector3 *pos) {
         spdlog::info("{}, {} {} {}", __PRETTY_FUNCTION__, pos->x, pos->y, pos->z);
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(256);
 
         DynamiteMessage::Vec3 p(pos->x, pos->y, pos->z);
         auto sv = DynamiteMessage::CreateAddFixedUserMarker(builder, &p);
-        auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_AddFixedUserMarker, sv.Union());
+        auto message = WrapMessage(builder, packet, DynamiteMessage::Message_AddFixedUserMarker, sv.Union());
         builder.Finish(message);
         auto res = SendRaw(&builder);
         spdlog::info("{}: {}", __PRETTY_FUNCTION__, res);
@@ -1169,11 +980,11 @@ namespace Dynamite {
             return;
         }
 
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(128);
         const auto p = DynamiteMessage::Vec3(pos->x, pos->y, pos->z);
         const auto sv = DynamiteMessage::CreateCarryDrop(builder, objectID, &p, rotY);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_CarryDrop, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_CarryDrop, sv.Union());
         builder.Finish(message);
         const auto res = SendRaw(&builder);
         spdlog::info("{}: object {}, {:.1f} {:.1f} {:.1f}, sent {}", __PRETTY_FUNCTION__, objectID, pos->x, pos->y, pos->z, res);
@@ -1209,7 +1020,7 @@ namespace Dynamite {
 
     void DynamiteSyncImpl::SendVehicleState(const VehicleStateInfo &v) {
         using namespace std::chrono_literals;
-        if (!PartnerInSession()) {
+        if (!CoopReady() || !VehicleID(v.objectID) || !FinitePosition(v.pos.x, v.pos.y, v.pos.z, v.rotY)) {
             return;
         }
 
@@ -1220,23 +1031,26 @@ namespace Dynamite {
             const auto it = vehicleSent.find(v.objectID);
             if (it != vehicleSent.end()) {
                 const auto elapsed = now - it->second.time;
-                const auto dx = v.pos.x - it->second.pos.x, dy = v.pos.y - it->second.pos.y, dz = v.pos.z - it->second.pos.z;
-                const auto moved = dx * dx + dy * dy + dz * dz > 0.1f * 0.1f;
-                if (elapsed < 100ms || (!moved && elapsed < 5s)) {
+                const auto &old = it->second.state;
+                const auto dx = v.pos.x - old.pos.x, dy = v.pos.y - old.pos.y, dz = v.pos.z - old.pos.z;
+                const auto changed = dx * dx + dy * dy + dz * dz > 0.1f * 0.1f || std::abs(v.rotY - old.rotY) > 0.01f || v.driven != old.driven || v.hasRot != old.hasRot;
+                if (elapsed < 100ms || (!changed && elapsed < (v.driven ? 500ms : 5s))) {
                     return;
                 }
             }
 
-            vehicleSent[v.objectID] = {now, v.pos};
         }
 
-        packetNumber++;
+        const auto packet = packetNumber.fetch_add(1) + 1;
         flatbuffers::FlatBufferBuilder builder(128);
         const auto p = DynamiteMessage::Vec3(v.pos.x, v.pos.y, v.pos.z);
         const auto sv = DynamiteMessage::CreateVehicleState(builder, v.objectID, &p, v.rotY, v.hasRot, v.driven);
-        const auto message = DynamiteMessage::CreateMessageWrapper(builder, packetNumber, DynamiteMessage::Message_VehicleState, sv.Union());
+        const auto message = WrapMessage(builder, packet, DynamiteMessage::Message_VehicleState, sv.Union());
         builder.Finish(message);
-        SendRaw(&builder);
+        if (SendRaw(&builder)) {
+            std::lock_guard lock(vehicleStatesMutex);
+            vehicleSent[v.objectID] = {now, v};
+        }
     }
 
     void DynamiteSyncImpl::HandleVehicleState(const DynamiteMessage::MessageWrapper *w) {
@@ -1264,14 +1078,18 @@ namespace Dynamite {
     }
 
     bool DynamiteSyncImpl::SendRaw(const flatbuffers::FlatBufferBuilder *builder) const {
-        if (steamUDPSocket == nullptr) {
-            spdlog::info("{}, steamUDPSocket is null", __PRETTY_FUNCTION__);
+        if (builder == nullptr) return false;
+        // SteamUdpSocketImpl::Send (0x141a5fb60) ignores argument four.
+        // Native calls legitimately supply nullptr for SocketInfo; requiring it
+        // prevents every custom packet, including the initial co-op handshake.
+        if (steamUDPSocket == nullptr || steamUDPAddress == nullptr) {
+            spdlog::debug("{}, transport endpoint unavailable (socket={}, address={})", __PRETTY_FUNCTION__, steamUDPSocket, steamUDPAddress);
             return false;
         }
 
         auto buf = builder->GetBufferPointer();
         auto size = builder->GetSize();
-        if (size == 0 || size > (sizeof(this->updateBuffer) + sizeof(DYNAMITE_RAW_HEADER))) {
+        if (size == 0 || size > MaxSyncPayload) {
             spdlog::info("{}, invalid size {}", __PRETTY_FUNCTION__, size);
             return false;
         }
@@ -1310,44 +1128,87 @@ namespace Dynamite {
 
         // auto snf = *(SteamNetworkingFunc*)0x14db4f7c8;
         // auto networking = snf();
-        FoxNioImplSteamUdpSocketImplSend(steamUDPSocket, newBuf, bfSize, steamUDPSocketInfo, steamUDPAddress);
+        const auto sent = FoxNioImplSteamUdpSocketImplSend(steamUDPSocket, newBuf, bfSize, steamUDPSocketInfo, steamUDPAddress);
 
         free(newBuf);
 
-        return true;
+        return sent == static_cast<int32_t>(bfSize);
     }
 
     bool DynamiteSyncImpl::RecvRaw(void *buffer, int32_t size) {
-        if (g_hook->cfg.debug.dynamiteMsg) {
-            auto bytes = bytes_to_hex(buffer, size);
-            spdlog::info("{}, size={}, dump={}", __PRETTY_FUNCTION__, size, bytes);
+        if (!buffer || size <= static_cast<int32_t>(sizeof(DYNAMITE_RAW_HEADER)) ||
+            size > static_cast<int32_t>(MaxSyncPayload + sizeof(DYNAMITE_RAW_HEADER)) ||
+            std::memcmp(buffer, DYNAMITE_RAW_HEADER, sizeof(DYNAMITE_RAW_HEADER)) != 0) return false;
+        const auto begin = static_cast<const uint8_t *>(buffer) + sizeof(DYNAMITE_RAW_HEADER);
+        const auto length = size - sizeof(DYNAMITE_RAW_HEADER);
+        // Copy into owned, aligned storage before verification; never verify padding beyond the received bytes.
+        std::vector<uint8_t> data(begin, begin + length);
+        flatbuffers::Verifier verifier(data.data(), data.size());
+        if (!DynamiteMessage::VerifyMessageWrapperBuffer(verifier) || !ValidMessage(DynamiteMessage::GetMessageWrapper(data.data()))) return false;
+        std::lock_guard lock(incomingMutex);
+        if (incoming.size() >= 128) incoming.pop_front();
+        incoming.push_back(std::move(data));
+        return true;
+    }
+
+    void DynamiteSyncImpl::ProcessIncoming() {
+        std::lock_guard runtimeLock(runtimeMutex);
+        if (!missionPlaying || !PartnerInSession()) return;
+        std::deque<std::vector<uint8_t>> pending;
+        { std::lock_guard lock(incomingMutex); pending.swap(incoming); }
+        for (const auto &data : pending) {
+        const auto wrapper = DynamiteMessage::GetMessageWrapper(data.data());
+        if (wrapper->mission_code() != missionCode || wrapper->sender_epoch() == 0) continue;
+        if (wrapper->msg_type() == DynamiteMessage::Message_CoopHello) {
+            const auto hello = wrapper->msg_as_CoopHello();
+            if (hello->host() == g_hook->cfg.Host) continue;
+            // Epochs are monotonic on a peer. A delayed hello must not roll its binding back.
+            if (peerEpoch != 0 && wrapper->sender_epoch() < peerEpoch) continue;
+            pendingPeerEpoch = wrapper->sender_epoch();
+            if (hello->echo_epoch() == localEpoch && peerEpoch != wrapper->sender_epoch()) {
+                peerEpoch = wrapper->sender_epoch();
+                replay = {};
+                questSequence = 0;
+                questState.reset();
+                buddyScans.Reset();
+                dogReplica.Reset();
+                entitySequences.clear();
+                spdlog::info("co-op protocol ready: mission {}, peer epoch {}", missionCode.load(), peerEpoch.load());
+                SendEmblem();
+            }
+            continue;
         }
-
-        if ((size - sizeof(DYNAMITE_RAW_HEADER)) > sizeof(this->updateBuffer)) {
-            spdlog::error("{}, incoming packet is too big ({})", __PRETTY_FUNCTION__, size);
-            return false;
+        if (wrapper->sender_epoch() != peerEpoch || wrapper->receiver_epoch() != localEpoch || !replay.Accept(wrapper->packet_num())) continue;
+        const auto type = wrapper->msg_type();
+        // Only the host publishes world/quest state. Clients may request world generation variables.
+        if ((type == DynamiteMessage::Message_SyncVar || type == DynamiteMessage::Message_QuestState ||
+            (type >= DynamiteMessage::Message_SendBossQuietActionCommand && type <= DynamiteMessage::Message_SendBossQuietSetActionTask)) && g_hook->cfg.Host) continue;
+        if (type == DynamiteMessage::Message_RequestVar && !g_hook->cfg.Host) continue;
+        if (type == DynamiteMessage::Message_CarryDrop || type == DynamiteMessage::Message_VehicleState) {
+            const auto id = type == DynamiteMessage::Message_CarryDrop ? wrapper->msg_as_CarryDrop()->object_id() : wrapper->msg_as_VehicleState()->object_id();
+            auto &last = entitySequences[id];
+            if (!NewerSequence(wrapper->packet_num(), last)) continue;
+            last = wrapper->packet_num();
         }
-
-        auto buflen = size - sizeof(DYNAMITE_RAW_HEADER);
-        memset(this->updateBuffer, 0, sizeof(this->updateBuffer));
-        memcpy(this->updateBuffer, (char *)buffer + sizeof(DYNAMITE_RAW_HEADER), buflen);
-
-        auto verifier = flatbuffers::Verifier((uint8_t *)this->updateBuffer, sizeof(this->updateBuffer));
-        auto ok = DynamiteMessage::VerifyMessageWrapperBuffer(verifier);
-        if (!ok) {
-            spdlog::error("{}, message wrapper verification failed", __PRETTY_FUNCTION__);
-            return false;
-        }
-
-        auto wrapper = DynamiteMessage::GetMessageWrapper(this->updateBuffer);
-        if (wrapper->packet_num() <= packetSeen) {
-            spdlog::info("{}, incoming packet {}, have {}, ignoring", __PRETTY_FUNCTION__, wrapper->packet_num(), packetSeen);
-            return false;
-        }
-
-        packetSeen = wrapper->packet_num();
-
         switch (wrapper->msg_type()) {
+        case DynamiteMessage::Message_DogReplicaPose: {
+            const auto part=DecodeDogPose(wrapper->msg_as_DogReplicaPose());
+            if(part && part->pose.owner!=(g_hook->cfg.Host?0:1)) dogReplica.Receive(*part,std::chrono::steady_clock::now());
+            break;
+        }
+        case DynamiteMessage::Message_BuddyScans: {
+            const auto ids=wrapper->msg_as_BuddyScans()->object_ids();
+            buddyScans.Receive(wrapper->packet_num(),{ids->begin(),ids->end()},std::chrono::steady_clock::now());
+            break;
+        }
+        case DynamiteMessage::Message_QuestState: {
+            if (missionCode != 30010 && missionCode != 30020) break;
+            if (!NewerSequence(wrapper->packet_num(), questSequence)) break;
+            questSequence = wrapper->packet_num();
+            const auto q = wrapper->msg_as_QuestState();
+            questState = QuestStateInfo{q->name()->str(), q->step()->str(), q->active(), q->invoked(), q->face_id()};
+            break;
+        }
         case DynamiteMessage::Message_Ping:
             spdlog::info("{}, ping", __PRETTY_FUNCTION__);
             break;
@@ -1398,6 +1259,84 @@ namespace Dynamite {
             break;
         }
 
-        return true;
+        }
     }
+
+    flatbuffers::Offset<DynamiteMessage::MessageWrapper> DynamiteSyncImpl::WrapMessage(flatbuffers::FlatBufferBuilder &builder,
+        uint32_t packet, DynamiteMessage::Message type, flatbuffers::Offset<void> message) const {
+        return DynamiteMessage::CreateMessageWrapper(builder, packet, type, message, missionCode.load(), localEpoch.load(), peerEpoch.load());
+    }
+
+    void DynamiteSyncImpl::SetMissionContext(uint32_t mission, bool playing) {
+        std::lock_guard lock(runtimeMutex);
+        if(missionCode!=mission || localEpoch==0) { buddyScans.Reset(true); dogReplica.Reset(true); }
+        // A disconnected session can rotate epochs without unloading the local Dog.
+        // Actual same-mission reloads clear local detections through the Lua world lifecycle.
+        if (!playing || missionCode != mission || localEpoch == 0) Init();
+        missionCode = mission;
+        missionPlaying = playing;
+    }
+
+    bool DynamiteSyncImpl::CoopReady() const { return missionPlaying && peerEpoch != 0 && PartnerInSession(); }
+
+    void DynamiteSyncImpl::SendCoopHello() {
+        if (!missionPlaying || !PartnerInSession()) return;
+        flatbuffers::FlatBufferBuilder builder(128);
+        const auto hello = DynamiteMessage::CreateCoopHello(builder, 4, g_hook->cfg.Host, pendingPeerEpoch.load());
+        const auto packet = packetNumber.fetch_add(1) + 1;
+        builder.Finish(WrapMessage(builder, packet, DynamiteMessage::Message_CoopHello, hello.Union()));
+        SendRaw(&builder);
+    }
+
+    void DynamiteSyncImpl::SendQuestState(const QuestStateInfo &state) {
+        if (!g_hook->cfg.Host || !CoopReady() || (missionCode != 30010 && missionCode != 30020)) return;
+        flatbuffers::FlatBufferBuilder builder(256);
+        const auto name = builder.CreateString(state.name);
+        const auto step = builder.CreateString(state.step);
+        const auto q = DynamiteMessage::CreateQuestState(builder, name, step, state.active, state.invoked, state.faceID);
+        const auto packet = packetNumber.fetch_add(1) + 1;
+        builder.Finish(WrapMessage(builder, packet, DynamiteMessage::Message_QuestState, q.Union()));
+        SendRaw(&builder);
+    }
+
+    std::optional<QuestStateInfo> DynamiteSyncImpl::PopQuestState() {
+        std::lock_guard lock(runtimeMutex);
+        auto q = std::move(questState);
+        questState.reset();
+        return q;
+    }
+
+    void DynamiteSyncImpl::SendBuddyScans() {
+        if(!CoopReady()) return;
+        const auto ids=buddyScans.Snapshot();
+        flatbuffers::FlatBufferBuilder b(256);
+        const auto m=DynamiteMessage::CreateBuddyScans(b,b.CreateVector(ids));
+        b.Finish(WrapMessage(b,packetNumber.fetch_add(1)+1,DynamiteMessage::Message_BuddyScans,m.Union()));
+        SendRaw(&b);
+    }
+    void DynamiteSyncImpl::UpdateBuddyScans(bool active) {
+        const auto changes=buddyScans.Frame(active && CoopReady(),std::chrono::steady_clock::now());
+        for(const auto &change:changes) BuddyScans::Apply(change.id,change.enabled);
+        if(active) SendBuddyScans();
+    }
+
+    void DynamiteSyncImpl::SendDogReplica(bool selected,uint32_t generation) {
+        if(!CoopReady()) return;
+        const auto pose=dogReplica.Outgoing(selected,g_hook->cfg.Host?0:1,generation,std::chrono::steady_clock::now());
+        const size_t count=pose.bones.size();
+        for(size_t first=0;first<std::max<size_t>(count,1);first+=DogBonesPerChunk) {
+            const size_t length=std::min<size_t>(DogBonesPerChunk,count-first);
+            flatbuffers::FlatBufferBuilder b(1024);
+            const auto world=b.CreateVector(pose.world.data(),pose.active?16:0);
+            std::vector<float> values(length*16);
+            if(length) std::memcpy(values.data(),pose.bones.data()+first,length*sizeof(DogMatrix));
+            const auto matrices=b.CreateVector(values);
+            const DynamiteMessage::Vec3 position(pose.position[0],pose.position[1],pose.position[2]);
+            const DynamiteMessage::BuddyRotation rotation(pose.rotation[0],pose.rotation[1],pose.rotation[2],pose.rotation[3]);
+            const auto m=DynamiteMessage::CreateDogReplicaPose(b,pose.generation,pose.frame,pose.owner,pose.active,pose.space,count,first,world,matrices,pose.active?&position:nullptr,pose.active?&rotation:nullptr);
+            b.Finish(WrapMessage(b,packetNumber.fetch_add(1)+1,DynamiteMessage::Message_DogReplicaPose,m.Union()));
+            if(b.GetSize()<=MaxSyncPayload) SendRaw(&b);
+        }
+    }
+
 }

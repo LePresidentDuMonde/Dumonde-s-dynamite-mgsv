@@ -1,0 +1,66 @@
+﻿{
+    "date":  "2026-11-15",
+    "protocol":  2,
+    "companion_model":  "one shared team companion",
+    "status":  "experimental, incomplete",
+    "build":  {
+                  "artifact":  "dynamite-shared-buddies-experimental-windows-amd64.exe",
+                  "bytes":  22371840,
+                  "exact_embedded_files":  [
+                                               {
+                                                   "bytes":  3644928,
+                                                   "file":  "hook/cmake-build-release-docker-mingw15/dinput8.dll",
+                                                   "offset":  12498656,
+                                                   "sha256":  "cc688b4727e636353fdeba2a6e48174b5fcc8f0fc5b48347c8183ce0505fb169"
+                                               },
+                                               {
+                                                   "bytes":  6844,
+                                                   "file":  "moddata/standalone/DynamiteBuddy.lua",
+                                                   "offset":  8635552,
+                                                   "sha256":  "7750d30c52af4b060ef6241c2ae147e3e9c8f9de67fc497001f0ddb05008d341"
+                                               },
+                                               {
+                                                   "bytes":  8619,
+                                                   "file":  "moddata/standalone/DynamiteCoop.lua",
+                                                   "offset":  8657280,
+                                                   "sha256":  "2ae6af742383ca0a20f9d3d5c0da6d15740b3f495462170282d102ed14fbf98c"
+                                               }
+                                           ],
+                  "sha256":  "474d759236eabda817d1807a596b328bd40494f54b1663b387ad86a6442f35ea"
+              },
+    "tests_command":  "powershell -NoProfile -ExecutionPolicy Bypass -File tests/run.ps1",
+    "native_protocol_tests":  "passed",
+    "native_adapter_tests":  "passed with synthetic actors and stubbed engine methods",
+    "lua_syntax_files":  52,
+    "lua_lifecycle_tests":  "passed",
+    "go_test":  "passed ./... (compilation, no Go test files)",
+    "game_executed":  false,
+    "game_installation_modified":  false,
+    "two_pc_gameplay_validated":  false,
+    "full_buddy_synchronization":  false,
+    "native_ai_runs_on_both_peers":  true,
+    "remaining":  [
+                      "single host application of all attack effects",
+                      "skeleton and animation phases",
+                      "life and complete AI state",
+                      "simultaneous native horse seat ownership",
+                      "Quiet and D-Walker adapters",
+                      "two-PC gameplay and stability verification"
+                  ],
+    "source_hashes":  {
+                          "hook/src/LocalBuddy.cpp":  "07195944db1a5f6756fd042c164e30f6805ffa595bb3a7070dbeb53e6087a62e",
+                          "hook/src/SharedBuddy.cpp":  "a913d17131cb99b29f8e32375eb72f3f2e48b1a15ff7f7bc34e70a058155fbd0",
+                          "hook/src/DynamiteLua.cpp":  "10f2a34bad98641f60f26416c9d1debb88e5c87e08083c421112f3e3ee08ff9a",
+                          "hook/src/DynamiteSyncImpl/BuddyProtocol.h":  "36bf80c5b1b82ed5d2d6ac66d841afeb6437dcc5c9a01e1760a3fed00d0b4b8b",
+                          "hook/src/DynamiteSyncImpl/DynamiteSyncSchema.fbs":  "cbd107593d44b2ac7954644e6b3f3fbd3cb77864fd7b1ef5543ad55105113ab0",
+                          "hook/src/DynamiteSyncImpl/DynamiteSyncImpl.cpp":  "1450d75a1e9d4cddadc6c7a7b430b4bdcb33ef1b67ed7a16828748625d239e42",
+                          "hook/src/DynamiteSyncImpl/MessageValidation.h":  "75d11ef3aa82eaa113997964c7681032f70e61ec79dfec0b29b946a05f6c45b1",
+                          "moddata/standalone/DynamiteBuddy.lua":  "7750d30c52af4b060ef6241c2ae147e3e9c8f9de67fc497001f0ddb05008d341",
+                          "moddata/standalone/DynamiteCoop.lua":  "2ae6af742383ca0a20f9d3d5c0da6d15740b3f495462170282d102ed14fbf98c",
+                          "moddata/standalone/Tpp.lua":  "54229f515becb5517c2fa14fae659fbc5ecab726e57fe79540f3fff26e83c5e7",
+                          "moddata/moddata.go":  "0e84c2a5a00b6aaae8c2e8941d76c70195715cfa9d15b7e085e812d9e7ff9ce0",
+                          "tests/native_sync.cpp":  "919b417a86bc5049ec4445f15260b073cfd7784ae47f36120ba699d709f759be",
+                          "tests/native_buddy.cpp":  "346acd5a16890c4ec149bae7d2d68038c059857e634eb146bd728ec8b8a81c04",
+                          "tests/buddies.lua":  "2ae0873ec8952b69ab0e448e2bef4d30d35c26e265b35235a76c8cd96a140120"
+                      }
+}

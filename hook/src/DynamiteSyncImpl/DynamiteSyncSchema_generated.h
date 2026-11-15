@@ -35,6 +35,12 @@ struct RemoveUserMarkerBuilder;
 struct SetSightMarker;
 struct SetSightMarkerBuilder;
 
+struct BuddyScans;
+struct BuddyScansBuilder;
+
+struct DogReplicaPose;
+struct DogReplicaPoseBuilder;
+
 struct RequestVar;
 struct RequestVarBuilder;
 
@@ -91,6 +97,26 @@ struct CarryDropBuilder;
 struct VehicleState;
 struct VehicleStateBuilder;
 
+struct CoopHello;
+struct CoopHelloBuilder;
+
+struct QuestState;
+struct QuestStateBuilder;
+
+struct BuddyRotation;
+
+struct BuddyState;
+struct BuddyStateBuilder;
+
+struct BuddyOrder;
+struct BuddyOrderBuilder;
+
+struct BuddyAck;
+struct BuddyAckBuilder;
+
+struct BuddyMotion;
+struct BuddyMotionBuilder;
+
 enum Message : uint8_t {
   Message_NONE = 0,
   Message_Ping = 1,
@@ -108,11 +134,19 @@ enum Message : uint8_t {
   Message_SendBossQuietDamage = 13,
   Message_CarryDrop = 14,
   Message_VehicleState = 15,
+  Message_CoopHello = 16,
+  Message_QuestState = 17,
+  Message_BuddyState = 18,
+  Message_BuddyOrder = 19,
+  Message_BuddyAck = 20,
+  Message_BuddyMotion = 21,
+  Message_BuddyScans = 22,
+  Message_DogReplicaPose = 23,
   Message_MIN = Message_NONE,
-  Message_MAX = Message_VehicleState
+  Message_MAX = Message_DogReplicaPose
 };
 
-inline const Message (&EnumValuesMessage())[16] {
+inline const Message (&EnumValuesMessage())[24] {
   static const Message values[] = {
     Message_NONE,
     Message_Ping,
@@ -129,13 +163,21 @@ inline const Message (&EnumValuesMessage())[16] {
     Message_SendBossQuietSetActionTask,
     Message_SendBossQuietDamage,
     Message_CarryDrop,
-    Message_VehicleState
+    Message_VehicleState,
+    Message_CoopHello,
+    Message_QuestState,
+    Message_BuddyState,
+    Message_BuddyOrder,
+    Message_BuddyAck,
+    Message_BuddyMotion,
+    Message_BuddyScans,
+    Message_DogReplicaPose
   };
   return values;
 }
 
 inline const char * const *EnumNamesMessage() {
-  static const char * const names[17] = {
+  static const char * const names[25] = {
     "NONE",
     "Ping",
     "AddFixedUserMarker",
@@ -152,13 +194,21 @@ inline const char * const *EnumNamesMessage() {
     "SendBossQuietDamage",
     "CarryDrop",
     "VehicleState",
+    "CoopHello",
+    "QuestState",
+    "BuddyState",
+    "BuddyOrder",
+    "BuddyAck",
+    "BuddyMotion",
+    "BuddyScans",
+    "DogReplicaPose",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameMessage(Message e) {
-  if (::flatbuffers::IsOutRange(e, Message_NONE, Message_VehicleState)) return "";
+  if (::flatbuffers::IsOutRange(e, Message_NONE, Message_DogReplicaPose)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesMessage()[index];
 }
@@ -225,6 +275,38 @@ template<> struct MessageTraits<DynamiteMessage::CarryDrop> {
 
 template<> struct MessageTraits<DynamiteMessage::VehicleState> {
   static const Message enum_value = Message_VehicleState;
+};
+
+template<> struct MessageTraits<DynamiteMessage::CoopHello> {
+  static const Message enum_value = Message_CoopHello;
+};
+
+template<> struct MessageTraits<DynamiteMessage::QuestState> {
+  static const Message enum_value = Message_QuestState;
+};
+
+template<> struct MessageTraits<DynamiteMessage::BuddyState> {
+  static const Message enum_value = Message_BuddyState;
+};
+
+template<> struct MessageTraits<DynamiteMessage::BuddyOrder> {
+  static const Message enum_value = Message_BuddyOrder;
+};
+
+template<> struct MessageTraits<DynamiteMessage::BuddyAck> {
+  static const Message enum_value = Message_BuddyAck;
+};
+
+template<> struct MessageTraits<DynamiteMessage::BuddyMotion> {
+  static const Message enum_value = Message_BuddyMotion;
+};
+
+template<> struct MessageTraits<DynamiteMessage::BuddyScans> {
+  static const Message enum_value = Message_BuddyScans;
+};
+
+template<> struct MessageTraits<DynamiteMessage::DogReplicaPose> {
+  static const Message enum_value = Message_DogReplicaPose;
 };
 
 bool VerifyMessage(::flatbuffers::Verifier &verifier, const void *obj, Message type);
@@ -435,12 +517,50 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) EmblemInfo FLATBUFFERS_FINAL_CLASS {
 };
 FLATBUFFERS_STRUCT_END(EmblemInfo, 64);
 
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) BuddyRotation FLATBUFFERS_FINAL_CLASS {
+ private:
+  float x_;
+  float y_;
+  float z_;
+  float w_;
+
+ public:
+  BuddyRotation()
+      : x_(0),
+        y_(0),
+        z_(0),
+        w_(0) {
+  }
+  BuddyRotation(float _x, float _y, float _z, float _w)
+      : x_(::flatbuffers::EndianScalar(_x)),
+        y_(::flatbuffers::EndianScalar(_y)),
+        z_(::flatbuffers::EndianScalar(_z)),
+        w_(::flatbuffers::EndianScalar(_w)) {
+  }
+  float x() const {
+    return ::flatbuffers::EndianScalar(x_);
+  }
+  float y() const {
+    return ::flatbuffers::EndianScalar(y_);
+  }
+  float z() const {
+    return ::flatbuffers::EndianScalar(z_);
+  }
+  float w() const {
+    return ::flatbuffers::EndianScalar(w_);
+  }
+};
+FLATBUFFERS_STRUCT_END(BuddyRotation, 16);
+
 struct MessageWrapper FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef MessageWrapperBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_PACKET_NUM = 4,
     VT_MSG_TYPE = 6,
-    VT_MSG = 8
+    VT_MSG = 8,
+    VT_MISSION_CODE = 10,
+    VT_SENDER_EPOCH = 12,
+    VT_RECEIVER_EPOCH = 14
   };
   uint32_t packet_num() const {
     return GetField<uint32_t>(VT_PACKET_NUM, 0);
@@ -497,12 +617,48 @@ struct MessageWrapper FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const DynamiteMessage::VehicleState *msg_as_VehicleState() const {
     return msg_type() == DynamiteMessage::Message_VehicleState ? static_cast<const DynamiteMessage::VehicleState *>(msg()) : nullptr;
   }
+  const DynamiteMessage::CoopHello *msg_as_CoopHello() const {
+    return msg_type() == DynamiteMessage::Message_CoopHello ? static_cast<const DynamiteMessage::CoopHello *>(msg()) : nullptr;
+  }
+  const DynamiteMessage::QuestState *msg_as_QuestState() const {
+    return msg_type() == DynamiteMessage::Message_QuestState ? static_cast<const DynamiteMessage::QuestState *>(msg()) : nullptr;
+  }
+  const DynamiteMessage::BuddyState *msg_as_BuddyState() const {
+    return msg_type() == DynamiteMessage::Message_BuddyState ? static_cast<const DynamiteMessage::BuddyState *>(msg()) : nullptr;
+  }
+  const DynamiteMessage::BuddyOrder *msg_as_BuddyOrder() const {
+    return msg_type() == DynamiteMessage::Message_BuddyOrder ? static_cast<const DynamiteMessage::BuddyOrder *>(msg()) : nullptr;
+  }
+  const DynamiteMessage::BuddyAck *msg_as_BuddyAck() const {
+    return msg_type() == DynamiteMessage::Message_BuddyAck ? static_cast<const DynamiteMessage::BuddyAck *>(msg()) : nullptr;
+  }
+  const DynamiteMessage::BuddyMotion *msg_as_BuddyMotion() const {
+    return msg_type() == DynamiteMessage::Message_BuddyMotion ? static_cast<const DynamiteMessage::BuddyMotion *>(msg()) : nullptr;
+  }
+  const DynamiteMessage::BuddyScans *msg_as_BuddyScans() const {
+    return msg_type() == DynamiteMessage::Message_BuddyScans ? static_cast<const DynamiteMessage::BuddyScans *>(msg()) : nullptr;
+  }
+  const DynamiteMessage::DogReplicaPose *msg_as_DogReplicaPose() const {
+    return msg_type() == DynamiteMessage::Message_DogReplicaPose ? static_cast<const DynamiteMessage::DogReplicaPose *>(msg()) : nullptr;
+  }
+  uint32_t mission_code() const {
+    return GetField<uint32_t>(VT_MISSION_CODE, 0);
+  }
+  uint64_t sender_epoch() const {
+    return GetField<uint64_t>(VT_SENDER_EPOCH, 0);
+  }
+  uint64_t receiver_epoch() const {
+    return GetField<uint64_t>(VT_RECEIVER_EPOCH, 0);
+  }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint32_t>(verifier, VT_PACKET_NUM, 4) &&
            VerifyField<uint8_t>(verifier, VT_MSG_TYPE, 1) &&
            VerifyOffset(verifier, VT_MSG) &&
            VerifyMessage(verifier, msg(), msg_type()) &&
+           VerifyField<uint32_t>(verifier, VT_MISSION_CODE, 4) &&
+           VerifyField<uint64_t>(verifier, VT_SENDER_EPOCH, 8) &&
+           VerifyField<uint64_t>(verifier, VT_RECEIVER_EPOCH, 8) &&
            verifier.EndTable();
   }
 };
@@ -567,6 +723,38 @@ template<> inline const DynamiteMessage::VehicleState *MessageWrapper::msg_as<Dy
   return msg_as_VehicleState();
 }
 
+template<> inline const DynamiteMessage::CoopHello *MessageWrapper::msg_as<DynamiteMessage::CoopHello>() const {
+  return msg_as_CoopHello();
+}
+
+template<> inline const DynamiteMessage::QuestState *MessageWrapper::msg_as<DynamiteMessage::QuestState>() const {
+  return msg_as_QuestState();
+}
+
+template<> inline const DynamiteMessage::BuddyState *MessageWrapper::msg_as<DynamiteMessage::BuddyState>() const {
+  return msg_as_BuddyState();
+}
+
+template<> inline const DynamiteMessage::BuddyOrder *MessageWrapper::msg_as<DynamiteMessage::BuddyOrder>() const {
+  return msg_as_BuddyOrder();
+}
+
+template<> inline const DynamiteMessage::BuddyAck *MessageWrapper::msg_as<DynamiteMessage::BuddyAck>() const {
+  return msg_as_BuddyAck();
+}
+
+template<> inline const DynamiteMessage::BuddyMotion *MessageWrapper::msg_as<DynamiteMessage::BuddyMotion>() const {
+  return msg_as_BuddyMotion();
+}
+
+template<> inline const DynamiteMessage::BuddyScans *MessageWrapper::msg_as<DynamiteMessage::BuddyScans>() const {
+  return msg_as_BuddyScans();
+}
+
+template<> inline const DynamiteMessage::DogReplicaPose *MessageWrapper::msg_as<DynamiteMessage::DogReplicaPose>() const {
+  return msg_as_DogReplicaPose();
+}
+
 struct MessageWrapperBuilder {
   typedef MessageWrapper Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
@@ -579,6 +767,15 @@ struct MessageWrapperBuilder {
   }
   void add_msg(::flatbuffers::Offset<void> msg) {
     fbb_.AddOffset(MessageWrapper::VT_MSG, msg);
+  }
+  void add_mission_code(uint32_t mission_code) {
+    fbb_.AddElement<uint32_t>(MessageWrapper::VT_MISSION_CODE, mission_code, 0);
+  }
+  void add_sender_epoch(uint64_t sender_epoch) {
+    fbb_.AddElement<uint64_t>(MessageWrapper::VT_SENDER_EPOCH, sender_epoch, 0);
+  }
+  void add_receiver_epoch(uint64_t receiver_epoch) {
+    fbb_.AddElement<uint64_t>(MessageWrapper::VT_RECEIVER_EPOCH, receiver_epoch, 0);
   }
   explicit MessageWrapperBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -595,8 +792,14 @@ inline ::flatbuffers::Offset<MessageWrapper> CreateMessageWrapper(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint32_t packet_num = 0,
     DynamiteMessage::Message msg_type = DynamiteMessage::Message_NONE,
-    ::flatbuffers::Offset<void> msg = 0) {
+    ::flatbuffers::Offset<void> msg = 0,
+    uint32_t mission_code = 0,
+    uint64_t sender_epoch = 0,
+    uint64_t receiver_epoch = 0) {
   MessageWrapperBuilder builder_(_fbb);
+  builder_.add_receiver_epoch(receiver_epoch);
+  builder_.add_sender_epoch(sender_epoch);
+  builder_.add_mission_code(mission_code);
   builder_.add_msg(msg);
   builder_.add_packet_num(packet_num);
   builder_.add_msg_type(msg_type);
@@ -786,13 +989,13 @@ struct SetSightMarker FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   uint32_t object_id() const {
     return GetField<uint32_t>(VT_OBJECT_ID, 0);
   }
-  uint32_t duration() const {
-    return GetField<uint32_t>(VT_DURATION, 0);
+  float duration() const {
+    return GetField<float>(VT_DURATION, 0.0f);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint32_t>(verifier, VT_OBJECT_ID, 4) &&
-           VerifyField<uint32_t>(verifier, VT_DURATION, 4) &&
+           VerifyField<float>(verifier, VT_DURATION, 4) &&
            verifier.EndTable();
   }
 };
@@ -804,8 +1007,8 @@ struct SetSightMarkerBuilder {
   void add_object_id(uint32_t object_id) {
     fbb_.AddElement<uint32_t>(SetSightMarker::VT_OBJECT_ID, object_id, 0);
   }
-  void add_duration(uint32_t duration) {
-    fbb_.AddElement<uint32_t>(SetSightMarker::VT_DURATION, duration, 0);
+  void add_duration(float duration) {
+    fbb_.AddElement<float>(SetSightMarker::VT_DURATION, duration, 0.0f);
   }
   explicit SetSightMarkerBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -821,11 +1024,238 @@ struct SetSightMarkerBuilder {
 inline ::flatbuffers::Offset<SetSightMarker> CreateSetSightMarker(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint32_t object_id = 0,
-    uint32_t duration = 0) {
+    float duration = 0.0f) {
   SetSightMarkerBuilder builder_(_fbb);
   builder_.add_duration(duration);
   builder_.add_object_id(object_id);
   return builder_.Finish();
+}
+
+struct BuddyScans FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef BuddyScansBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_OBJECT_IDS = 4
+  };
+  const ::flatbuffers::Vector<uint16_t> *object_ids() const {
+    return GetPointer<const ::flatbuffers::Vector<uint16_t> *>(VT_OBJECT_IDS);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffsetRequired(verifier, VT_OBJECT_IDS) &&
+           verifier.VerifyVector(object_ids()) &&
+           verifier.EndTable();
+  }
+};
+
+struct BuddyScansBuilder {
+  typedef BuddyScans Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_object_ids(::flatbuffers::Offset<::flatbuffers::Vector<uint16_t>> object_ids) {
+    fbb_.AddOffset(BuddyScans::VT_OBJECT_IDS, object_ids);
+  }
+  explicit BuddyScansBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<BuddyScans> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<BuddyScans>(end);
+    fbb_.Required(o, BuddyScans::VT_OBJECT_IDS);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<BuddyScans> CreateBuddyScans(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::Vector<uint16_t>> object_ids = 0) {
+  BuddyScansBuilder builder_(_fbb);
+  builder_.add_object_ids(object_ids);
+  return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<BuddyScans> CreateBuddyScansDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const std::vector<uint16_t> *object_ids = nullptr) {
+  auto object_ids__ = object_ids ? _fbb.CreateVector<uint16_t>(*object_ids) : 0;
+  return DynamiteMessage::CreateBuddyScans(
+      _fbb,
+      object_ids__);
+}
+
+struct DogReplicaPose FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef DogReplicaPoseBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_GENERATION = 4,
+    VT_FRAME = 6,
+    VT_OWNER = 8,
+    VT_ACTIVE = 10,
+    VT_SPACE = 12,
+    VT_BONE_COUNT = 14,
+    VT_FIRST_BONE = 16,
+    VT_WORLD = 18,
+    VT_MATRICES = 20,
+    VT_POSITION = 22,
+    VT_ROTATION = 24
+  };
+  uint32_t generation() const {
+    return GetField<uint32_t>(VT_GENERATION, 0);
+  }
+  uint32_t frame() const {
+    return GetField<uint32_t>(VT_FRAME, 0);
+  }
+  uint8_t owner() const {
+    return GetField<uint8_t>(VT_OWNER, 0);
+  }
+  bool active() const {
+    return GetField<uint8_t>(VT_ACTIVE, 0) != 0;
+  }
+  uint8_t space() const {
+    return GetField<uint8_t>(VT_SPACE, 0);
+  }
+  uint16_t bone_count() const {
+    return GetField<uint16_t>(VT_BONE_COUNT, 0);
+  }
+  uint16_t first_bone() const {
+    return GetField<uint16_t>(VT_FIRST_BONE, 0);
+  }
+  const ::flatbuffers::Vector<float> *world() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_WORLD);
+  }
+  const ::flatbuffers::Vector<float> *matrices() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_MATRICES);
+  }
+  const DynamiteMessage::Vec3 *position() const {
+    return GetStruct<const DynamiteMessage::Vec3 *>(VT_POSITION);
+  }
+  const DynamiteMessage::BuddyRotation *rotation() const {
+    return GetStruct<const DynamiteMessage::BuddyRotation *>(VT_ROTATION);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_GENERATION, 4) &&
+           VerifyField<uint32_t>(verifier, VT_FRAME, 4) &&
+           VerifyField<uint8_t>(verifier, VT_OWNER, 1) &&
+           VerifyField<uint8_t>(verifier, VT_ACTIVE, 1) &&
+           VerifyField<uint8_t>(verifier, VT_SPACE, 1) &&
+           VerifyField<uint16_t>(verifier, VT_BONE_COUNT, 2) &&
+           VerifyField<uint16_t>(verifier, VT_FIRST_BONE, 2) &&
+           VerifyOffsetRequired(verifier, VT_WORLD) &&
+           verifier.VerifyVector(world()) &&
+           VerifyOffsetRequired(verifier, VT_MATRICES) &&
+           verifier.VerifyVector(matrices()) &&
+           VerifyField<DynamiteMessage::Vec3>(verifier, VT_POSITION, 4) &&
+           VerifyField<DynamiteMessage::BuddyRotation>(verifier, VT_ROTATION, 4) &&
+           verifier.EndTable();
+  }
+};
+
+struct DogReplicaPoseBuilder {
+  typedef DogReplicaPose Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_generation(uint32_t generation) {
+    fbb_.AddElement<uint32_t>(DogReplicaPose::VT_GENERATION, generation, 0);
+  }
+  void add_frame(uint32_t frame) {
+    fbb_.AddElement<uint32_t>(DogReplicaPose::VT_FRAME, frame, 0);
+  }
+  void add_owner(uint8_t owner) {
+    fbb_.AddElement<uint8_t>(DogReplicaPose::VT_OWNER, owner, 0);
+  }
+  void add_active(bool active) {
+    fbb_.AddElement<uint8_t>(DogReplicaPose::VT_ACTIVE, static_cast<uint8_t>(active), 0);
+  }
+  void add_space(uint8_t space) {
+    fbb_.AddElement<uint8_t>(DogReplicaPose::VT_SPACE, space, 0);
+  }
+  void add_bone_count(uint16_t bone_count) {
+    fbb_.AddElement<uint16_t>(DogReplicaPose::VT_BONE_COUNT, bone_count, 0);
+  }
+  void add_first_bone(uint16_t first_bone) {
+    fbb_.AddElement<uint16_t>(DogReplicaPose::VT_FIRST_BONE, first_bone, 0);
+  }
+  void add_world(::flatbuffers::Offset<::flatbuffers::Vector<float>> world) {
+    fbb_.AddOffset(DogReplicaPose::VT_WORLD, world);
+  }
+  void add_matrices(::flatbuffers::Offset<::flatbuffers::Vector<float>> matrices) {
+    fbb_.AddOffset(DogReplicaPose::VT_MATRICES, matrices);
+  }
+  void add_position(const DynamiteMessage::Vec3 *position) {
+    fbb_.AddStruct(DogReplicaPose::VT_POSITION, position);
+  }
+  void add_rotation(const DynamiteMessage::BuddyRotation *rotation) {
+    fbb_.AddStruct(DogReplicaPose::VT_ROTATION, rotation);
+  }
+  explicit DogReplicaPoseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<DogReplicaPose> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<DogReplicaPose>(end);
+    fbb_.Required(o, DogReplicaPose::VT_WORLD);
+    fbb_.Required(o, DogReplicaPose::VT_MATRICES);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<DogReplicaPose> CreateDogReplicaPose(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t generation = 0,
+    uint32_t frame = 0,
+    uint8_t owner = 0,
+    bool active = false,
+    uint8_t space = 0,
+    uint16_t bone_count = 0,
+    uint16_t first_bone = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> world = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> matrices = 0,
+    const DynamiteMessage::Vec3 *position = nullptr,
+    const DynamiteMessage::BuddyRotation *rotation = nullptr) {
+  DogReplicaPoseBuilder builder_(_fbb);
+  builder_.add_rotation(rotation);
+  builder_.add_position(position);
+  builder_.add_matrices(matrices);
+  builder_.add_world(world);
+  builder_.add_frame(frame);
+  builder_.add_generation(generation);
+  builder_.add_first_bone(first_bone);
+  builder_.add_bone_count(bone_count);
+  builder_.add_space(space);
+  builder_.add_active(active);
+  builder_.add_owner(owner);
+  return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<DogReplicaPose> CreateDogReplicaPoseDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t generation = 0,
+    uint32_t frame = 0,
+    uint8_t owner = 0,
+    bool active = false,
+    uint8_t space = 0,
+    uint16_t bone_count = 0,
+    uint16_t first_bone = 0,
+    const std::vector<float> *world = nullptr,
+    const std::vector<float> *matrices = nullptr,
+    const DynamiteMessage::Vec3 *position = nullptr,
+    const DynamiteMessage::BuddyRotation *rotation = nullptr) {
+  auto world__ = world ? _fbb.CreateVector<float>(*world) : 0;
+  auto matrices__ = matrices ? _fbb.CreateVector<float>(*matrices) : 0;
+  return DynamiteMessage::CreateDogReplicaPose(
+      _fbb,
+      generation,
+      frame,
+      owner,
+      active,
+      space,
+      bone_count,
+      first_bone,
+      world__,
+      matrices__,
+      position,
+      rotation);
 }
 
 struct RequestVar FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -2000,6 +2430,574 @@ inline ::flatbuffers::Offset<VehicleState> CreateVehicleState(
   return builder_.Finish();
 }
 
+struct CoopHello FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef CoopHelloBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_PROTOCOL = 4,
+    VT_HOST = 6,
+    VT_ECHO_EPOCH = 8
+  };
+  uint32_t protocol() const {
+    return GetField<uint32_t>(VT_PROTOCOL, 0);
+  }
+  bool host() const {
+    return GetField<uint8_t>(VT_HOST, 0) != 0;
+  }
+  uint64_t echo_epoch() const {
+    return GetField<uint64_t>(VT_ECHO_EPOCH, 0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_PROTOCOL, 4) &&
+           VerifyField<uint8_t>(verifier, VT_HOST, 1) &&
+           VerifyField<uint64_t>(verifier, VT_ECHO_EPOCH, 8) &&
+           verifier.EndTable();
+  }
+};
+
+struct CoopHelloBuilder {
+  typedef CoopHello Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_protocol(uint32_t protocol) {
+    fbb_.AddElement<uint32_t>(CoopHello::VT_PROTOCOL, protocol, 0);
+  }
+  void add_host(bool host) {
+    fbb_.AddElement<uint8_t>(CoopHello::VT_HOST, static_cast<uint8_t>(host), 0);
+  }
+  void add_echo_epoch(uint64_t echo_epoch) {
+    fbb_.AddElement<uint64_t>(CoopHello::VT_ECHO_EPOCH, echo_epoch, 0);
+  }
+  explicit CoopHelloBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<CoopHello> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<CoopHello>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<CoopHello> CreateCoopHello(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t protocol = 0,
+    bool host = false,
+    uint64_t echo_epoch = 0) {
+  CoopHelloBuilder builder_(_fbb);
+  builder_.add_echo_epoch(echo_epoch);
+  builder_.add_protocol(protocol);
+  builder_.add_host(host);
+  return builder_.Finish();
+}
+
+struct QuestState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef QuestStateBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_NAME = 4,
+    VT_STEP = 6,
+    VT_ACTIVE = 8,
+    VT_INVOKED = 10,
+    VT_FACE_ID = 12
+  };
+  const ::flatbuffers::String *name() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_NAME);
+  }
+  const ::flatbuffers::String *step() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_STEP);
+  }
+  bool active() const {
+    return GetField<uint8_t>(VT_ACTIVE, 0) != 0;
+  }
+  bool invoked() const {
+    return GetField<uint8_t>(VT_INVOKED, 0) != 0;
+  }
+  uint32_t face_id() const {
+    return GetField<uint32_t>(VT_FACE_ID, 65536);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffsetRequired(verifier, VT_NAME) &&
+           verifier.VerifyString(name()) &&
+           VerifyOffsetRequired(verifier, VT_STEP) &&
+           verifier.VerifyString(step()) &&
+           VerifyField<uint8_t>(verifier, VT_ACTIVE, 1) &&
+           VerifyField<uint8_t>(verifier, VT_INVOKED, 1) &&
+           VerifyField<uint32_t>(verifier, VT_FACE_ID, 4) &&
+           verifier.EndTable();
+  }
+};
+
+struct QuestStateBuilder {
+  typedef QuestState Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_name(::flatbuffers::Offset<::flatbuffers::String> name) {
+    fbb_.AddOffset(QuestState::VT_NAME, name);
+  }
+  void add_step(::flatbuffers::Offset<::flatbuffers::String> step) {
+    fbb_.AddOffset(QuestState::VT_STEP, step);
+  }
+  void add_active(bool active) {
+    fbb_.AddElement<uint8_t>(QuestState::VT_ACTIVE, static_cast<uint8_t>(active), 0);
+  }
+  void add_invoked(bool invoked) {
+    fbb_.AddElement<uint8_t>(QuestState::VT_INVOKED, static_cast<uint8_t>(invoked), 0);
+  }
+  void add_face_id(uint32_t face_id) {
+    fbb_.AddElement<uint32_t>(QuestState::VT_FACE_ID, face_id, 65536);
+  }
+  explicit QuestStateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<QuestState> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<QuestState>(end);
+    fbb_.Required(o, QuestState::VT_NAME);
+    fbb_.Required(o, QuestState::VT_STEP);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<QuestState> CreateQuestState(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::String> name = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> step = 0,
+    bool active = false,
+    bool invoked = false,
+    uint32_t face_id = 65536) {
+  QuestStateBuilder builder_(_fbb);
+  builder_.add_face_id(face_id);
+  builder_.add_step(step);
+  builder_.add_name(name);
+  builder_.add_invoked(invoked);
+  builder_.add_active(active);
+  return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<QuestState> CreateQuestStateDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *name = nullptr,
+    const char *step = nullptr,
+    bool active = false,
+    bool invoked = false,
+    uint32_t face_id = 65536) {
+  auto name__ = name ? _fbb.CreateString(name) : 0;
+  auto step__ = step ? _fbb.CreateString(step) : 0;
+  return DynamiteMessage::CreateQuestState(
+      _fbb,
+      name__,
+      step__,
+      active,
+      invoked,
+      face_id);
+}
+
+struct BuddyState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef BuddyStateBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_REVISION = 4,
+    VT_BUDDY_TYPE = 6,
+    VT_HORSE_EQUIP = 8,
+    VT_DOG_EQUIP = 10,
+    VT_DOG_SKIN = 12,
+    VT_READY = 14,
+    VT_POS = 16,
+    VT_ROTATION = 18,
+    VT_RIDER = 20,
+    VT_HORSE_COLOR = 22,
+    VT_HORSE_HEAD = 24,
+    VT_HORSE_FOOT = 26,
+    VT_DOG_EYE = 28
+  };
+  uint32_t revision() const {
+    return GetField<uint32_t>(VT_REVISION, 0);
+  }
+  uint8_t buddy_type() const {
+    return GetField<uint8_t>(VT_BUDDY_TYPE, 0);
+  }
+  uint8_t horse_equip() const {
+    return GetField<uint8_t>(VT_HORSE_EQUIP, 0);
+  }
+  uint8_t dog_equip() const {
+    return GetField<uint8_t>(VT_DOG_EQUIP, 0);
+  }
+  uint8_t dog_skin() const {
+    return GetField<uint8_t>(VT_DOG_SKIN, 0);
+  }
+  bool ready() const {
+    return GetField<uint8_t>(VT_READY, 0) != 0;
+  }
+  const DynamiteMessage::Vec3 *pos() const {
+    return GetStruct<const DynamiteMessage::Vec3 *>(VT_POS);
+  }
+  const DynamiteMessage::BuddyRotation *rotation() const {
+    return GetStruct<const DynamiteMessage::BuddyRotation *>(VT_ROTATION);
+  }
+  int8_t rider() const {
+    return GetField<int8_t>(VT_RIDER, -1);
+  }
+  uint8_t horse_color() const {
+    return GetField<uint8_t>(VT_HORSE_COLOR, 0);
+  }
+  uint8_t horse_head() const {
+    return GetField<uint8_t>(VT_HORSE_HEAD, 0);
+  }
+  uint8_t horse_foot() const {
+    return GetField<uint8_t>(VT_HORSE_FOOT, 0);
+  }
+  uint8_t dog_eye() const {
+    return GetField<uint8_t>(VT_DOG_EYE, 0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_REVISION, 4) &&
+           VerifyField<uint8_t>(verifier, VT_BUDDY_TYPE, 1) &&
+           VerifyField<uint8_t>(verifier, VT_HORSE_EQUIP, 1) &&
+           VerifyField<uint8_t>(verifier, VT_DOG_EQUIP, 1) &&
+           VerifyField<uint8_t>(verifier, VT_DOG_SKIN, 1) &&
+           VerifyField<uint8_t>(verifier, VT_READY, 1) &&
+           VerifyField<DynamiteMessage::Vec3>(verifier, VT_POS, 4) &&
+           VerifyField<DynamiteMessage::BuddyRotation>(verifier, VT_ROTATION, 4) &&
+           VerifyField<int8_t>(verifier, VT_RIDER, 1) &&
+           VerifyField<uint8_t>(verifier, VT_HORSE_COLOR, 1) &&
+           VerifyField<uint8_t>(verifier, VT_HORSE_HEAD, 1) &&
+           VerifyField<uint8_t>(verifier, VT_HORSE_FOOT, 1) &&
+           VerifyField<uint8_t>(verifier, VT_DOG_EYE, 1) &&
+           verifier.EndTable();
+  }
+};
+
+struct BuddyStateBuilder {
+  typedef BuddyState Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_revision(uint32_t revision) {
+    fbb_.AddElement<uint32_t>(BuddyState::VT_REVISION, revision, 0);
+  }
+  void add_buddy_type(uint8_t buddy_type) {
+    fbb_.AddElement<uint8_t>(BuddyState::VT_BUDDY_TYPE, buddy_type, 0);
+  }
+  void add_horse_equip(uint8_t horse_equip) {
+    fbb_.AddElement<uint8_t>(BuddyState::VT_HORSE_EQUIP, horse_equip, 0);
+  }
+  void add_dog_equip(uint8_t dog_equip) {
+    fbb_.AddElement<uint8_t>(BuddyState::VT_DOG_EQUIP, dog_equip, 0);
+  }
+  void add_dog_skin(uint8_t dog_skin) {
+    fbb_.AddElement<uint8_t>(BuddyState::VT_DOG_SKIN, dog_skin, 0);
+  }
+  void add_ready(bool ready) {
+    fbb_.AddElement<uint8_t>(BuddyState::VT_READY, static_cast<uint8_t>(ready), 0);
+  }
+  void add_pos(const DynamiteMessage::Vec3 *pos) {
+    fbb_.AddStruct(BuddyState::VT_POS, pos);
+  }
+  void add_rotation(const DynamiteMessage::BuddyRotation *rotation) {
+    fbb_.AddStruct(BuddyState::VT_ROTATION, rotation);
+  }
+  void add_rider(int8_t rider) {
+    fbb_.AddElement<int8_t>(BuddyState::VT_RIDER, rider, -1);
+  }
+  void add_horse_color(uint8_t horse_color) {
+    fbb_.AddElement<uint8_t>(BuddyState::VT_HORSE_COLOR, horse_color, 0);
+  }
+  void add_horse_head(uint8_t horse_head) {
+    fbb_.AddElement<uint8_t>(BuddyState::VT_HORSE_HEAD, horse_head, 0);
+  }
+  void add_horse_foot(uint8_t horse_foot) {
+    fbb_.AddElement<uint8_t>(BuddyState::VT_HORSE_FOOT, horse_foot, 0);
+  }
+  void add_dog_eye(uint8_t dog_eye) {
+    fbb_.AddElement<uint8_t>(BuddyState::VT_DOG_EYE, dog_eye, 0);
+  }
+  explicit BuddyStateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<BuddyState> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<BuddyState>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<BuddyState> CreateBuddyState(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t revision = 0,
+    uint8_t buddy_type = 0,
+    uint8_t horse_equip = 0,
+    uint8_t dog_equip = 0,
+    uint8_t dog_skin = 0,
+    bool ready = false,
+    const DynamiteMessage::Vec3 *pos = nullptr,
+    const DynamiteMessage::BuddyRotation *rotation = nullptr,
+    int8_t rider = -1,
+    uint8_t horse_color = 0,
+    uint8_t horse_head = 0,
+    uint8_t horse_foot = 0,
+    uint8_t dog_eye = 0) {
+  BuddyStateBuilder builder_(_fbb);
+  builder_.add_rotation(rotation);
+  builder_.add_pos(pos);
+  builder_.add_revision(revision);
+  builder_.add_dog_eye(dog_eye);
+  builder_.add_horse_foot(horse_foot);
+  builder_.add_horse_head(horse_head);
+  builder_.add_horse_color(horse_color);
+  builder_.add_rider(rider);
+  builder_.add_ready(ready);
+  builder_.add_dog_skin(dog_skin);
+  builder_.add_dog_equip(dog_equip);
+  builder_.add_horse_equip(horse_equip);
+  builder_.add_buddy_type(buddy_type);
+  return builder_.Finish();
+}
+
+struct BuddyOrder FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef BuddyOrderBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_REVISION = 4,
+    VT_SERIAL = 6,
+    VT_BUDDY_TYPE = 8,
+    VT_COMMAND = 10,
+    VT_PLAYER = 12,
+    VT_TARGET = 14,
+    VT_OPTION = 16,
+    VT_POS = 18
+  };
+  uint32_t revision() const {
+    return GetField<uint32_t>(VT_REVISION, 0);
+  }
+  uint32_t serial() const {
+    return GetField<uint32_t>(VT_SERIAL, 0);
+  }
+  uint8_t buddy_type() const {
+    return GetField<uint8_t>(VT_BUDDY_TYPE, 0);
+  }
+  uint64_t command() const {
+    return GetField<uint64_t>(VT_COMMAND, 0);
+  }
+  uint8_t player() const {
+    return GetField<uint8_t>(VT_PLAYER, 0);
+  }
+  uint16_t target() const {
+    return GetField<uint16_t>(VT_TARGET, 65535);
+  }
+  uint8_t option() const {
+    return GetField<uint8_t>(VT_OPTION, 0);
+  }
+  const DynamiteMessage::Vec3 *pos() const {
+    return GetStruct<const DynamiteMessage::Vec3 *>(VT_POS);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_REVISION, 4) &&
+           VerifyField<uint32_t>(verifier, VT_SERIAL, 4) &&
+           VerifyField<uint8_t>(verifier, VT_BUDDY_TYPE, 1) &&
+           VerifyField<uint64_t>(verifier, VT_COMMAND, 8) &&
+           VerifyField<uint8_t>(verifier, VT_PLAYER, 1) &&
+           VerifyField<uint16_t>(verifier, VT_TARGET, 2) &&
+           VerifyField<uint8_t>(verifier, VT_OPTION, 1) &&
+           VerifyField<DynamiteMessage::Vec3>(verifier, VT_POS, 4) &&
+           verifier.EndTable();
+  }
+};
+
+struct BuddyOrderBuilder {
+  typedef BuddyOrder Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_revision(uint32_t revision) {
+    fbb_.AddElement<uint32_t>(BuddyOrder::VT_REVISION, revision, 0);
+  }
+  void add_serial(uint32_t serial) {
+    fbb_.AddElement<uint32_t>(BuddyOrder::VT_SERIAL, serial, 0);
+  }
+  void add_buddy_type(uint8_t buddy_type) {
+    fbb_.AddElement<uint8_t>(BuddyOrder::VT_BUDDY_TYPE, buddy_type, 0);
+  }
+  void add_command(uint64_t command) {
+    fbb_.AddElement<uint64_t>(BuddyOrder::VT_COMMAND, command, 0);
+  }
+  void add_player(uint8_t player) {
+    fbb_.AddElement<uint8_t>(BuddyOrder::VT_PLAYER, player, 0);
+  }
+  void add_target(uint16_t target) {
+    fbb_.AddElement<uint16_t>(BuddyOrder::VT_TARGET, target, 65535);
+  }
+  void add_option(uint8_t option) {
+    fbb_.AddElement<uint8_t>(BuddyOrder::VT_OPTION, option, 0);
+  }
+  void add_pos(const DynamiteMessage::Vec3 *pos) {
+    fbb_.AddStruct(BuddyOrder::VT_POS, pos);
+  }
+  explicit BuddyOrderBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<BuddyOrder> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<BuddyOrder>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<BuddyOrder> CreateBuddyOrder(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t revision = 0,
+    uint32_t serial = 0,
+    uint8_t buddy_type = 0,
+    uint64_t command = 0,
+    uint8_t player = 0,
+    uint16_t target = 65535,
+    uint8_t option = 0,
+    const DynamiteMessage::Vec3 *pos = nullptr) {
+  BuddyOrderBuilder builder_(_fbb);
+  builder_.add_command(command);
+  builder_.add_pos(pos);
+  builder_.add_serial(serial);
+  builder_.add_revision(revision);
+  builder_.add_target(target);
+  builder_.add_option(option);
+  builder_.add_player(player);
+  builder_.add_buddy_type(buddy_type);
+  return builder_.Finish();
+}
+
+struct BuddyAck FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef BuddyAckBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_REVISION = 4,
+    VT_SERIAL = 6,
+    VT_ACCEPTED = 8
+  };
+  uint32_t revision() const {
+    return GetField<uint32_t>(VT_REVISION, 0);
+  }
+  uint32_t serial() const {
+    return GetField<uint32_t>(VT_SERIAL, 0);
+  }
+  bool accepted() const {
+    return GetField<uint8_t>(VT_ACCEPTED, 0) != 0;
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_REVISION, 4) &&
+           VerifyField<uint32_t>(verifier, VT_SERIAL, 4) &&
+           VerifyField<uint8_t>(verifier, VT_ACCEPTED, 1) &&
+           verifier.EndTable();
+  }
+};
+
+struct BuddyAckBuilder {
+  typedef BuddyAck Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_revision(uint32_t revision) {
+    fbb_.AddElement<uint32_t>(BuddyAck::VT_REVISION, revision, 0);
+  }
+  void add_serial(uint32_t serial) {
+    fbb_.AddElement<uint32_t>(BuddyAck::VT_SERIAL, serial, 0);
+  }
+  void add_accepted(bool accepted) {
+    fbb_.AddElement<uint8_t>(BuddyAck::VT_ACCEPTED, static_cast<uint8_t>(accepted), 0);
+  }
+  explicit BuddyAckBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<BuddyAck> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<BuddyAck>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<BuddyAck> CreateBuddyAck(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t revision = 0,
+    uint32_t serial = 0,
+    bool accepted = false) {
+  BuddyAckBuilder builder_(_fbb);
+  builder_.add_serial(serial);
+  builder_.add_revision(revision);
+  builder_.add_accepted(accepted);
+  return builder_.Finish();
+}
+
+struct BuddyMotion FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef BuddyMotionBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_REVISION = 4,
+    VT_MOUNTED = 6,
+    VT_POS = 8,
+    VT_ROTATION = 10
+  };
+  uint32_t revision() const {
+    return GetField<uint32_t>(VT_REVISION, 0);
+  }
+  bool mounted() const {
+    return GetField<uint8_t>(VT_MOUNTED, 0) != 0;
+  }
+  const DynamiteMessage::Vec3 *pos() const {
+    return GetStruct<const DynamiteMessage::Vec3 *>(VT_POS);
+  }
+  const DynamiteMessage::BuddyRotation *rotation() const {
+    return GetStruct<const DynamiteMessage::BuddyRotation *>(VT_ROTATION);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_REVISION, 4) &&
+           VerifyField<uint8_t>(verifier, VT_MOUNTED, 1) &&
+           VerifyField<DynamiteMessage::Vec3>(verifier, VT_POS, 4) &&
+           VerifyField<DynamiteMessage::BuddyRotation>(verifier, VT_ROTATION, 4) &&
+           verifier.EndTable();
+  }
+};
+
+struct BuddyMotionBuilder {
+  typedef BuddyMotion Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_revision(uint32_t revision) {
+    fbb_.AddElement<uint32_t>(BuddyMotion::VT_REVISION, revision, 0);
+  }
+  void add_mounted(bool mounted) {
+    fbb_.AddElement<uint8_t>(BuddyMotion::VT_MOUNTED, static_cast<uint8_t>(mounted), 0);
+  }
+  void add_pos(const DynamiteMessage::Vec3 *pos) {
+    fbb_.AddStruct(BuddyMotion::VT_POS, pos);
+  }
+  void add_rotation(const DynamiteMessage::BuddyRotation *rotation) {
+    fbb_.AddStruct(BuddyMotion::VT_ROTATION, rotation);
+  }
+  explicit BuddyMotionBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<BuddyMotion> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<BuddyMotion>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<BuddyMotion> CreateBuddyMotion(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t revision = 0,
+    bool mounted = false,
+    const DynamiteMessage::Vec3 *pos = nullptr,
+    const DynamiteMessage::BuddyRotation *rotation = nullptr) {
+  BuddyMotionBuilder builder_(_fbb);
+  builder_.add_rotation(rotation);
+  builder_.add_pos(pos);
+  builder_.add_revision(revision);
+  builder_.add_mounted(mounted);
+  return builder_.Finish();
+}
+
 inline bool VerifyMessage(::flatbuffers::Verifier &verifier, const void *obj, Message type) {
   switch (type) {
     case Message_NONE: {
@@ -2063,6 +3061,38 @@ inline bool VerifyMessage(::flatbuffers::Verifier &verifier, const void *obj, Me
     }
     case Message_VehicleState: {
       auto ptr = reinterpret_cast<const DynamiteMessage::VehicleState *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_CoopHello: {
+      auto ptr = reinterpret_cast<const DynamiteMessage::CoopHello *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_QuestState: {
+      auto ptr = reinterpret_cast<const DynamiteMessage::QuestState *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_BuddyState: {
+      auto ptr = reinterpret_cast<const DynamiteMessage::BuddyState *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_BuddyOrder: {
+      auto ptr = reinterpret_cast<const DynamiteMessage::BuddyOrder *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_BuddyAck: {
+      auto ptr = reinterpret_cast<const DynamiteMessage::BuddyAck *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_BuddyMotion: {
+      auto ptr = reinterpret_cast<const DynamiteMessage::BuddyMotion *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_BuddyScans: {
+      auto ptr = reinterpret_cast<const DynamiteMessage::BuddyScans *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_DogReplicaPose: {
+      auto ptr = reinterpret_cast<const DynamiteMessage::DogReplicaPose *>(obj);
       return verifier.VerifyTable(ptr);
     }
     default: return true;

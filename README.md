@@ -27,6 +27,10 @@ https://github.com/user-attachments/assets/e82c43c7-eace-4084-b1fd-c4fb8ef3abe2
 
 [Build from source](./docs/BUILD.md)
 
+[SideOps and local companion changes, validation and limitations (French)](./docs/SIDEOPS_BUDDIES_FR.md)
+
+[Two visible D-Dog actors, shared scans, experimental validation and limitations (French)](./docs/TWO_DDOGS_FR.md)
+
 ### Support the project
 
 <a href="https://boosty.to/unknown321/donate" target="_blank">Boosty</a>

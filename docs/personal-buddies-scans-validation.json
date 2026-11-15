@@ -1,0 +1,25 @@
+﻿{
+  "artifact": "dynamite-personal-buddies-windows-amd64.exe",
+  "bytes": 22362112,
+  "exact_embedded_files": [
+    {
+      "bytes": 3640832,
+      "file": "hook/cmake-build-release-docker-mingw15/dinput8.dll",
+      "offset": 12493344,
+      "sha256": "2e8cc73f568e21126b20d55822603f10f0b3c48cd338be6b39f7a037adb5a7a6"
+    },
+    {
+      "bytes": 1059,
+      "file": "moddata/standalone/DynamiteBuddy.lua",
+      "offset": 8564320,
+      "sha256": "b33b3719c7864b9bc5ba2a2a38ac461def9837145ca388ccc543cf0ccd7abed3"
+    },
+    {
+      "bytes": 8619,
+      "file": "moddata/standalone/DynamiteCoop.lua",
+      "offset": 8651520,
+      "sha256": "2ae6af742383ca0a20f9d3d5c0da6d15740b3f495462170282d102ed14fbf98c"
+    }
+  ],
+  "sha256": "2747c31d0055dd4831d21f9913af30a397153d8cbeebe91872301c7638521404"
+}

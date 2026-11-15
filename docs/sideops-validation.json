@@ -1,0 +1,28 @@
+{
+    "date":  "2026-11-15",
+    "artifact":  "dynamite-sideops-local-buddies-windows-amd64.exe",
+    "launcher_sha256":  "e69e4feea11236a03deab47d593a9039f12cfe1431f63ca50f99d3cf8179d9a1",
+    "dll_sha256":  "52daa3203a70e76113cb43cc6f022396aa7b08b1a8000a364974d8685e9aaca0",
+    "current_dll_embedded":  true,
+    "native_protocol_tests":  "passed; production receiver/senders with stubbed native services; 10000 invalid frames",
+    "lua_syntax_files":  51,
+    "lua_syntax":  "passed, Lua 5.1.5",
+    "quest_lifecycle":  "passed with the extracted stock TppQuest.lua and stubbed engine services",
+    "go_test":  "./... passed (compilation, no Go test files)",
+    "game_executed":  false,
+    "game_installation_modified":  false,
+    "two_pc_gameplay_validated":  false,
+    "remote_independent_buddies_implemented":  false,
+    "source_hashes":  {
+                          "hook/src/LocalBuddy.cpp":  "83383ecdc011764ea6b0a6218c53485570ee1090b2cb72e6d56cf72a53262429",
+                          "hook/src/DynamiteCore.cpp":  "1d9bdf286647091c20c10563eccf336b5084b751725c8603f61d1c189a12d9d7",
+                          "hook/src/DynamiteSyncImpl/DynamiteSyncImpl.cpp":  "926760a1cc2880feb37f478d72feaca2bfe5a95023b30e6183a097a667f41e46",
+                          "hook/src/DynamiteSyncImpl/DynamiteSyncSchema.fbs":  "7297e406c08d6af0207141d4ce6e18e7ab075702d40db18094edc01ad0dfdde6",
+                          "moddata/standalone/DynamiteCoop.lua":  "29818df6c9e42fc58db14a92288f2dce9f7ddf19033ffee67f711890760b6a85",
+                          "moddata/standalone/TppMain.lua":  "21dc135ccf21f0c13147396a33583eb5ba4f18b2a59c8183715c8ba0798a5365",
+                          "moddata/standalone/TppEnemy.lua":  "1ae115fa874a054d478957639e9541f36228026afccd5bb295c84538b32895be",
+                          "moddata/moddata.go":  "135477fee4d1236ad92126a3ef32f3a707cd85023d8de5a1de6f64d9cb35cfe0",
+                          "tests/native_sync.cpp":  "fbb7f2b06742152aa2e34d8ba96d1f3730aac03b4e85e614ec4666d35f44b5ee",
+                          "tests/gameplay.lua":  "bf8e384d5385f01a1cffb08236f124da4a994434880bae3c10504b98ec2eb184"
+                      }
+}

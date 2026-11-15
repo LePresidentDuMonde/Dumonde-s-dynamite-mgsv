@@ -3900,6 +3900,7 @@ function e.VarSaveOnUpdateCheckPoint(n)
 	end
 end
 function e.SafeStopSettingOnMissionReload(n)
+	if vars.missionCode == 10080 then DynamiteCoop.PrepareMissionReload() end
 	local e
 	if n and n.setMute then
 		e = n.setMute

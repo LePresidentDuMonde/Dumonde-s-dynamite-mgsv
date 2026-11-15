@@ -85,7 +85,7 @@ namespace Dynamite {
             ENABLEHOOK(SoldierImplRouteAiImplCheckVehicleAndWalkerGearGetInAndOutStep)
         }
 
-        if (cfg.debug.statusControllerIsOnline) {
+        {
             CREATE_HOOK(StatusControllerImplIsSet)
             ENABLEHOOK(StatusControllerImplIsSet)
         }
@@ -311,6 +311,8 @@ namespace Dynamite {
 
         CREATE_HOOK(FoxNioImplSteamUdpSocketImplRecv)
         ENABLEHOOK(FoxNioImplSteamUdpSocketImplRecv)
+        CREATE_HOOK(Player2GameObjectImplWarp)
+        ENABLEHOOK(Player2GameObjectImplWarp)
 
         CREATE_HOOK(TppUiEmblemImplEmblemEditorSystemImplCreateEmblemParameters)
         ENABLEHOOK(TppUiEmblemImplEmblemEditorSystemImplCreateEmblemParameters)

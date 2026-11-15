@@ -45,6 +45,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(flatbuffers)
 
+add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/DynamiteSyncImpl/DynamiteSyncSchema_generated.h
+        COMMAND $<TARGET_FILE:flatc> --cpp -o ${CMAKE_CURRENT_SOURCE_DIR}/src/DynamiteSyncImpl
+                ${CMAKE_CURRENT_SOURCE_DIR}/src/DynamiteSyncImpl/DynamiteSyncSchema.fbs
+        DEPENDS flatc ${CMAKE_CURRENT_SOURCE_DIR}/src/DynamiteSyncImpl/DynamiteSyncSchema.fbs
+)
+add_custom_target(sync_schema DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/DynamiteSyncImpl/DynamiteSyncSchema_generated.h)
+
 include_directories(
         src/
 )
@@ -88,14 +96,35 @@ add_library(${PROJECT_NAME} SHARED
         src/dynamite.cpp
         src/DynamiteLua.cpp
         src/PartnerHorse.cpp
+        src/LocalBuddy.cpp
+        src/BuddyScans.cpp
+        src/DogReplica.cpp
         src/DynamiteHook.cpp
         src/main.cpp
         src/DInputProxy.cpp
 )
 
 add_dependencies(${PROJECT_NAME} version)
+add_dependencies(${PROJECT_NAME} sync_schema)
 
 target_compile_options(${PROJECT_NAME} PUBLIC -fpermissive ${OPTS})
 
 target_link_options(${PROJECT_NAME} PUBLIC -static)
 target_link_libraries(${PROJECT_NAME} flatbuffers minhook mINI spdlog::spdlog_header_only)
+
+option(DYNAMITE_BUILD_TESTS "Build offline protocol regression tests" OFF)
+if(DYNAMITE_BUILD_TESTS)
+    enable_testing()
+    add_executable(receive_demux_tests ../tests/receive_demux.cpp)
+    target_link_options(receive_demux_tests PRIVATE -static)
+    add_test(NAME receive_demux_tests COMMAND receive_demux_tests)
+    add_executable(session_notify_tests ../tests/session_notify.cpp)
+    target_link_options(session_notify_tests PRIVATE -static)
+    add_test(NAME session_notify_tests COMMAND session_notify_tests)
+    add_executable(sync_tests ../tests/native_sync.cpp ../tests/native_buddy.cpp ../tests/dog_replica.cpp src/DynamiteSyncImpl/DynamiteSyncImpl.cpp src/mgsvtpp_funcptr_defs.cpp src/Tpp/TppTypes.cpp)
+    add_dependencies(sync_tests sync_schema version)
+    target_link_libraries(sync_tests flatbuffers minhook mINI spdlog::spdlog_header_only)
+    target_compile_options(sync_tests PRIVATE -fpermissive)
+    target_link_options(sync_tests PRIVATE -static)
+    add_test(NAME sync_tests COMMAND sync_tests)
+endif()

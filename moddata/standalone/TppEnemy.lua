@@ -26,152 +26,112 @@ local function u(e)
 	end
 	return t
 end
--- dynamite: carrying is not synchronized, partner's copy of the npc stays where it was picked up.
--- While the local player carries an npc, partner moves its copy along, and to the spot where it is put down.
-local DYNAMITE_CARRY_START, DYNAMITE_CARRY_END = 0, 1
-local DYNAMITE_CARRIER_RANGE_SQ = 4 * 4
-local DYNAMITE_CARRY_SEND_FRAMES = 10
-local dynamiteFrame = 0
-local function DynamiteLogOnce(key, text)
-	if not mvars.dyn_logged[key] then
-		mvars.dyn_logged[key] = true
-		Dynamite.Log(text)
-	end
+-- Co-op entity corrections use live handles, bounded queues and the mission handshake.
+-- Companion instances are local AI; never move index 0 to the partner's position.
+local syncState = { nextSend = 0, nextScan = 0, remote = {}, driven = {}, vehicles = {}, logged = {} }
+local function syncOnline()
+    return mvars.dyn_gameStarted and TppMain.IsCoop(vars.missionCode)
+        and TppGameStatus.IsSet("Mission", "S_IS_ONLINE") and Dynamite.CoopReady and Dynamite.CoopReady()
 end
-local function DynamiteSendCarry(gameObjectId)
-	local pos, rotY = GameObject.SendCommand(gameObjectId, { id = "GetPosition" })
-	if pos then
-		Dynamite.SendCarryDrop(gameObjectId, pos:GetX(), pos:GetY(), pos:GetZ(), rotY or 0)
-	end
-	return pos
+local function liveId(id)
+    if type(id) ~= "number" or id < 0 or id >= GameObject.NULL_ID then return false end
+    local types = { [2] = "TppSoldier2", [3] = "TppHostage2", [4] = "TppHostageUnique",
+        [5] = "TppHostageUnique2", [6] = "TppHostageKaz", [15] = "TppEnemyHeli", [50] = "TppVehicle2" }
+    local name = types[math.floor(id / 512)]
+    return name ~= nil and GameObject.GetGameObjectIdByIndex(name, id % 512) == id
 end
-function e._DynamiteOnCarried(gameObjectId, carriedState)
-	if not (TppMain.IsCoop(vars.missionCode) and TppGameStatus.IsSet("Mission", "S_IS_ONLINE")) then
-		return
-	end
-	if carriedState == DYNAMITE_CARRY_START then
-		-- partner's game may report the pickup too; only the carrier stands next to the npc
-		local pos = GameObject.SendCommand(gameObjectId, { id = "GetPosition" })
-		if pos then
-			local dx, dy, dz = pos:GetX() - vars.playerPosX, pos:GetY() - vars.playerPosY, pos:GetZ() - vars.playerPosZ
-			if dx * dx + dy * dy + dz * dz <= DYNAMITE_CARRIER_RANGE_SQ then
-				mvars.dyn_carried = gameObjectId
-			end
-		end
-	elseif carriedState == DYNAMITE_CARRY_END and mvars.dyn_carried == gameObjectId then
-		mvars.dyn_carried = nil
-		DynamiteSendCarry(gameObjectId)
-	end
+local function command(id, args)
+    if not liveId(id) then return end
+    local ok, result, rot = pcall(GameObject.SendCommand, id, args)
+    if ok then return result, rot end
+    if not syncState.logged[args.id] then
+        syncState.logged[args.id] = true
+        Dynamite.Log("co-op command unavailable: " .. args.id)
+    end
 end
-local function DynamiteApplyCarryDrops()
-	local gameObjectId, x, y, z, rotY = Dynamite.PopCarryDrop()
-	while gameObjectId do
-		local res = GameObject.SendCommand(gameObjectId, { id = "Warp", position = Vector3(x, y, z), rotationY = rotY })
-		DynamiteLogOnce("carry" .. gameObjectId, string.format("carry drop: object %d to %.1f %.1f %.1f, warp result %s", gameObjectId, x, y, z, tostring(res)))
-		gameObjectId, x, y, z, rotY = Dynamite.PopCarryDrop()
-	end
+local function position(id)
+    local pos, rot = command(id, { id = "GetPosition" })
+    if (type(pos) == "userdata" or type(pos) == "table") and pos.GetX and pos.GetY and pos.GetZ then return pos, rot end
 end
--- dynamite: vehicle positions are not synchronized. The driver's game owns a vehicle, host owns ai driven and empty ones.
--- The other side moves its copy: on every update for player driven vehicles, only on big drift for the rest.
--- partner's D-Horse travels as a vehicle state with an id above 16 bit game object ids (see DynamiteSendHorse)
-local DYNAMITE_HORSE_STATE_ID = 0x10000
-local DYNAMITE_HORSE_TIMEOUT_FRAMES = 300
-local DYNAMITE_VEHICLE_TYPES = { "TppVehicle2", "TppEnemyHeli" }
-local DYNAMITE_VEHICLE_DRIFT_SQ = 3 * 3
-local DYNAMITE_REMOTE_DRIVE_FRAMES = 60
-local function DynamiteSendVehicles()
-	local isHost = Dynamite.IsHost()
-	for _, typeName in ipairs(DYNAMITE_VEHICLE_TYPES) do
-		for i = 0, 31 do
-			local id = GameObject.GetGameObjectIdByIndex(typeName, i)
-			if id == nil or id == GameObject.NULL_ID then
-				break
-			end
-			local driven = vars.playerVehicleGameObjectId == id
-			local remoteDriven = (mvars.dyn_remoteDriven[id] or -1) >= dynamiteFrame
-			if driven or (isHost and not remoteDriven) then
-				local pos, rotY = GameObject.SendCommand(id, { id = "GetPosition" })
-				if pos then
-					Dynamite.SendVehicleState(id, pos:GetX(), pos:GetY(), pos:GetZ(), rotY or 0, rotY ~= nil, driven)
-				else
-					DynamiteLogOnce("get" .. id, string.format("vehicle sync: %s %d has no position", typeName, id))
-				end
-			end
-		end
-	end
+local function sendCarry(id)
+    local pos, rot = position(id)
+    if pos then Dynamite.SendCarryDrop(id, pos:GetX(), pos:GetY(), pos:GetZ(), rot or 0) end
 end
-local function DynamiteApplyVehicles()
-	local id, x, y, z, rotY, hasRot, driven = Dynamite.PopVehicleState()
-	while id do
-		if id == DYNAMITE_HORSE_STATE_ID then
-			mvars.dyn_partnerHorse = { x = x, y = y, z = z, ridden = driven, frame = dynamiteFrame }
-		elseif driven then
-			mvars.dyn_remoteDriven[id] = dynamiteFrame + DYNAMITE_REMOTE_DRIVE_FRAMES
-		end
-		if id ~= DYNAMITE_HORSE_STATE_ID and vars.playerVehicleGameObjectId ~= id then
-			local pos, curRotY = GameObject.SendCommand(id, { id = "GetPosition" })
-			local drift = true
-			if pos then
-				local dx, dy, dz = pos:GetX() - x, pos:GetY() - y, pos:GetZ() - z
-				drift = dx * dx + dy * dy + dz * dz > DYNAMITE_VEHICLE_DRIFT_SQ
-			end
-			if driven or drift then
-				local res = GameObject.SendCommand(id, { id = "SetPosition", position = Vector3(x, y, z), rotY = hasRot and rotY or curRotY })
-				DynamiteLogOnce("set" .. id, string.format("vehicle sync: object %d moved to %.1f %.1f %.1f, driven %s, result %s", id, x, y, z, tostring(driven), tostring(res)))
-			end
-		end
-		id, x, y, z, rotY, hasRot, driven = Dynamite.PopVehicleState()
-	end
+function e._DynamiteOnCarried(id, carriedState)
+    if not syncOnline() then return end
+    if carriedState == 0 then
+        local pos = position(id)
+        if pos then
+            local dx, dy, dz = pos:GetX() - vars.playerPosX, pos:GetY() - vars.playerPosY, pos:GetZ() - vars.playerPosZ
+            if dx * dx + dy * dy + dz * dz <= 16 then mvars.dyn_carried = id end
+        end
+    elseif carriedState == 1 and mvars.dyn_carried == id then
+        mvars.dyn_carried = nil
+        sendCarry(id)
+    end
 end
--- dynamite: partner's D-Horse. The hook adds a second buddy horse that follows the partner's one:
--- runs after the partner while ridden, warps otherwise; hidden when the partner's horse is not reported anymore.
-local function DynamiteSendHorse()
-	if TppBuddy2BlockController.GetActiveBuddyType() ~= BuddyType.HORSE then
-		return
-	end
-	local horse = GameObject.GetGameObjectIdByIndex("TppHorse2", 0)
-	local x, y, z = Dynamite.GetLocalHorse()
-	if x == nil then
-		-- the hook learns the horse after its first command
-		if horse ~= GameObject.NULL_ID and dynamiteFrame % 60 == 0 then
-			GameObject.SendCommand(horse, { id = "IsRidePlayer" })
-		end
-		return
-	end
-	Dynamite.SendVehicleState(DYNAMITE_HORSE_STATE_ID, x, y, z, 0, false, vars.playerVehicleGameObjectId == horse)
+local function applyCarry()
+    for _ = 1, 32 do
+        local id, x, y, z, rot = Dynamite.PopCarryDrop()
+        if not id then break end
+        if mvars.dyn_carried ~= id then command(id, { id = "Warp", position = Vector3(x, y, z), rotationY = rot }) end
+    end
 end
-local function DynamiteFollowPartnerHorse()
-	local h = mvars.dyn_partnerHorse
-	if h == nil then
-		return
-	end
-	if dynamiteFrame - h.frame > DYNAMITE_HORSE_TIMEOUT_FRAMES then
-		mvars.dyn_partnerHorse = nil
-		Dynamite.HidePartnerHorse()
-		return
-	end
-	Dynamite.FollowPartnerHorse(h.x, h.y, h.z, h.ridden)
+local function sendVehicle(id, driven)
+    local pos, rot = position(id)
+    if pos then Dynamite.SendVehicleState(id, pos:GetX(), pos:GetY(), pos:GetZ(), rot or 0, rot ~= nil, driven) end
 end
--- called every frame
+local function applyVehicles(t)
+    for _ = 1, 128 do
+        local id, x, y, z, rot, hasRot, driven = Dynamite.PopVehicleState()
+        if not id then break end
+        local authorized = not Dynamite.IsHost() or driven or (syncState.remote[id] or 0) >= t
+        if driven then syncState.remote[id] = t + 2 end
+        if authorized and vars.playerVehicleGameObjectId ~= id then
+            local pos, curRot = position(id)
+            if pos then
+                local dx, dy, dz = pos:GetX() - x, pos:GetY() - y, pos:GetZ() - z
+                local angle = hasRot and curRot and math.abs((rot - curRot + math.pi) % (2 * math.pi) - math.pi) or 0
+                if driven or dx * dx + dy * dy + dz * dz > 9 or angle > 0.1 then
+                    local args = { id = "SetPosition", position = Vector3(x, y, z) }
+                    if hasRot or curRot then args.rotY = hasRot and rot or curRot end
+                    command(id, args)
+                end
+            end
+        end
+        if not driven then syncState.remote[id] = nil end
+    end
+end
 function e.DynamiteOnUpdate()
-	if not (mvars.dyn_gameStarted and TppMain.IsCoop(vars.missionCode) and TppGameStatus.IsSet("Mission", "S_IS_ONLINE")) then
-		return
-	end
-	dynamiteFrame = dynamiteFrame + 1
-	mvars.dyn_remoteDriven = mvars.dyn_remoteDriven or {}
-	mvars.dyn_logged = mvars.dyn_logged or {}
-	DynamiteApplyCarryDrops()
-	DynamiteApplyVehicles()
-	if mvars.dyn_carried and dynamiteFrame % DYNAMITE_CARRY_SEND_FRAMES == 0 then
-		DynamiteSendCarry(mvars.dyn_carried)
-	end
-	if dynamiteFrame % 3 == 0 then
-		DynamiteSendVehicles()
-		DynamiteSendHorse()
-	end
-	if dynamiteFrame % 10 == 0 then
-		DynamiteFollowPartnerHorse()
-	end
+    if not syncOnline() then
+        syncState = { nextSend = 0, nextScan = 0, remote = {}, driven = {}, vehicles = {}, logged = {} }
+        mvars.dyn_carried = nil
+        return
+    end
+    local t = Time.GetRawElapsedTimeSinceStartUp()
+    applyCarry()
+    applyVehicles(t)
+    if t < syncState.nextSend then return end
+    syncState.nextSend = t + 0.1
+    if mvars.dyn_carried then sendCarry(mvars.dyn_carried) end
+    if t >= syncState.nextScan then
+        syncState.nextScan = t + 1
+        syncState.vehicles = {}
+        for _, name in ipairs({ "TppVehicle2", "TppEnemyHeli" }) do
+            for index = 0, 511 do
+                local id = GameObject.GetGameObjectIdByIndex(name, index)
+                if id and id ~= GameObject.NULL_ID then syncState.vehicles[#syncState.vehicles + 1] = id end
+            end
+        end
+    end
+    for _, id in ipairs(syncState.vehicles) do
+        local driven = vars.playerVehicleGameObjectId == id
+        if driven or syncState.driven[id] or (Dynamite.IsHost() and (syncState.remote[id] or 0) < t) then
+            sendVehicle(id, driven)
+        end
+        syncState.driven[id] = driven or nil
+    end
+    for id, expires in pairs(syncState.remote) do if expires < t then syncState.remote[id] = nil end end
 end
 function e.Messages()
 	return Tpp.StrCode32Table({

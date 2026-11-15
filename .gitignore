@@ -9,3 +9,6 @@ cache
 moddata/test
 *.lng2
 build.log
+.build-tools/
+tests/bin/
+.research/
